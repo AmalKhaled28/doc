@@ -1,0 +1,19 @@
+%%{init: {"theme": "base", "themeVariables": {"actorBkg": "#E3F2FD", "actorBorder": "#90CAF9", "actorTextColor": "#0D47A1", "actorLineColor": "#90A4AE", "signalColor": "#37474F", "signalTextColor": "#263238", "noteBkgColor": "#FFFFFF", "noteBorderColor": "#BDBDBD", "noteTextColor": "#263238", "labelBoxBkgColor": "#FFFFFF", "labelBoxBorderColor": "#BDBDBD", "loopTextColor": "#263238", "sequenceNumberColor": "#FFFFFF"}}}%%
+sequenceDiagram
+    autonumber
+    actor OP as Operator
+    participant LA as Launcher
+    participant DR as Spark driver
+    participant EX as Executors
+    participant PG as PostgreSQL
+
+    OP->>LA: run stage script
+    Note over LA: package code
+    LA->>DR: spark-submit
+    DR->>PG: init schema, lock
+    loop until no pending work
+        DR->>PG: read pending rows
+        DR->>EX: send tasks
+        EX-->>DR: return results
+        DR->>PG: commit results
+    end

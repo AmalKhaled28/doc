@@ -1,0 +1,20 @@
+flowchart LR
+    CC["Common Crawl"]:::ext
+    PG[("PostgreSQL")]:::store
+
+    subgraph SPARK["Spark cluster"]
+        ING["Ingestion"]:::svc
+        CHK["Chunking"]:::svc
+        TAG["Tagging"]:::svc
+        EMB["Embeddings"]:::svc
+    end
+
+    CC --> ING --> CHK
+    CHK --> TAG --> PG
+    CHK --> EMB --> PG
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef proposed fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray:5 5,color:#616161
+    style SPARK fill:#FFFFFF,stroke:#BDBDBD

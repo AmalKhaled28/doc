@@ -1,0 +1,30 @@
+flowchart TD
+    subgraph PROD["Production: proposed"]
+        S1["Scheduler"]:::proposed
+        S2["Ingestion service"]:::proposed
+        S3["Spark cluster"]:::svc
+        S4[("PostgreSQL + backups")]:::store
+        S5["Query API"]:::proposed
+        S1 --> S3
+        S2 --> S3
+        S3 --> S4
+        S5 --> S4
+    end
+
+    subgraph PROTO["Prototype: today"]
+        P1["Operator"]:::ext
+        P2["Spark master"]:::svc
+        P3["3 workers"]:::svc
+        P4[("PostgreSQL")]:::store
+        P5["CLI queries"]:::svc
+        P1 --> P2 --> P3
+        P2 --> P4
+        P5 --> P4
+    end
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef proposed fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray:5 5,color:#616161
+    style PROTO fill:#FFFFFF,stroke:#BDBDBD
+    style PROD fill:#FFFFFF,stroke:#BDBDBD
