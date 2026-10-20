@@ -1,6 +1,6 @@
 # 03 — Cluster Design
 
-[Docs home](README.md) · Previous: [02 — Hardware and infrastructure](02-hardware-and-infrastructure.md) · Next: [04 — Modules](04-modules/)
+[Docs home](README.md) · Previous: [02 — Hardware and infrastructure](02-hardware-and-infrastructure.md) · Next: 04 — Modules (not written yet)
 
 ---
 
@@ -18,8 +18,8 @@ and failure. Physical specifications are in
 The master runs the launchers and the Spark driver, which sends bounded tasks to one
 single-core executor on each worker. Workers call external sites over HTTPS (Common
 Crawl when ingesting, Groq when tagging) but never connect to PostgreSQL: only the
-driver reads and writes the database. HDFS, PostgreSQL, and query-node hosts are
-TODO(team); ports are in [§6](#6-networking-and-ports).
+driver reads and writes the database. The HDFS, PostgreSQL, and query-node hosts are
+blanks in [§2](#2-node-roles-and-services); ports are in [§6](#6-networking-and-ports).
 *(Verified in code: [scripts/run_processing.sh](../scripts/run_processing.sh), [jobs/runtime.py](../jobs/runtime.py))*
 
 ## 2. Node roles and services
@@ -28,9 +28,9 @@ TODO(team); ports are in [§6](#6-networking-and-ports).
 |---|---|---|---|
 | spark-master | YARN ResourceManager (`:8032`); Spark driver of every stage; launcher packaging; `inspect_db.sh`, `export_csv.sh`, `watch_embeddings.sh` | Coordinator and sole database writer | ResourceManager: Recorded. Driver placement: Verified in code (client mode) |
 | worker1–3 | YARN NodeManager; Spark executors | Pure transforms: WARC parsing, cleaning and splitting, LLM calls, ONNX inference | Recorded (names); Verified in code (behavior) |
-| HDFS NameNode / DataNodes | HDFS | Archive cache and event logs | Verified in code (usage); placement TODO(team) |
-| PostgreSQL host | PostgreSQL + pgvector | System of record | Placement TODO(team) |
-| Query node | `.venv-rag` process | RAG question answering | Placement TODO(team) |
+| HDFS NameNode / DataNodes | HDFS | Archive cache and event logs | Verified in code (usage). Placement: [[FILL: hosts that run the HDFS NameNode and DataNodes]] |
+| PostgreSQL host | PostgreSQL + pgvector | System of record | Placement: [[FILL: host that runs PostgreSQL]] |
+| Query node | `.venv-rag` process | RAG question answering | Placement: [[FILL: host that runs scripts/ask.py]] |
 
 ## 3. How workloads are split
 
@@ -115,7 +115,15 @@ never deleted, locally or on HDFS. *(Verified in code: [scripts/run_processing.s
 
 Because the packed venv embeds its interpreter path, **every worker must have the same
 Python version and the same interpreter path as the launcher host**
-*(Recorded in [README.md](../README.md); Inferred from venv-pack behavior)*.
+*(Recorded in [README.md](../README.md); Inferred from venv-pack behavior)*. The local
+virtual environments use Python 3.13.5 *(Recorded:
+[archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.1)*;
+the worker values are a blank in [02 §2](02-hardware-and-infrastructure.md#2-node-roles).
+
+The embedding archive carries the model, but **not** the CPU. Workers must also share
+one CPU instruction set, or the same model gives different vectors under one
+`embedding_version` (see the warning in
+[02 §3.1](02-hardware-and-infrastructure.md#31-known-and-unknown-specifications)).
 
 ## 6. Networking and ports
 
@@ -123,10 +131,10 @@ Python version and the same interpreter path as the launcher host**
 |---|---|---|---|---|
 | 5432/TCP | PostgreSQL | DB host | Spark driver, query node, `psql` export | Verified in code (default `PGPORT`) |
 | 8032/TCP | YARN ResourceManager | spark-master | `spark-submit` | Recorded ([archive/validation.md](archive/validation.md)) |
-| TODO(team) | HDFS NameNode RPC | TODO(team) | Launcher (`hdfs dfs`), YARN localization | TODO(team): `hdfs://` URIs in code carry no host, so `fs.defaultFS` decides |
+| [[FILL: HDFS NameNode RPC port (fs.defaultFS)]] | HDFS NameNode RPC | NameNode host ([§2](#2-node-roles-and-services)) | Launcher (`hdfs dfs`), YARN localization | `hdfs://` URIs in code carry no host or port, so the cluster's `fs.defaultFS` setting decides (Verified in code) |
 | 4040/TCP | Spark application UI | spark-master (driver) | Operators | Inferred (Spark default; not set in repo) |
 | 8088/TCP | YARN ResourceManager web UI | spark-master | Operators | Inferred (Hadoop default; not set in repo) |
-| ephemeral | Spark driver RPC and block manager | spark-master ↔ workers | Executors | Inferred (Spark default; firewall rules TODO(team)) |
+| ephemeral | Spark driver RPC and block manager | spark-master ↔ workers | Executors | Inferred (Spark default). Firewall: [[FILL: firewall rules between the master and the workers]] |
 | 443/TCP outbound | HTTPS | workers, master, query node | Common Crawl, Groq, Gemini, Hugging Face, PyPI | Verified in code |
 
 **Network rules implied by the code:**
@@ -141,12 +149,12 @@ Python version and the same interpreter path as the launcher host**
 
 | Data | Store | Writer | Readers | Durability |
 |---|---|---|---|---|
-| Articles, chunks, analyses, vectors, run state | PostgreSQL | Stage drivers only | Drivers, query node, export | No backup in repo: TODO(team) / Proposed |
+| Articles, chunks, analyses, vectors, run state | PostgreSQL | Stage drivers only | Drivers, query node, export | No backup in repo. Outside the repo: [[FILL: is the database backed up today, and how]]. Scheduled backups: Proposed |
 | Code and environment archives | `.build-tmp/`, HDFS `HDFS_APPS_DIR` | Launcher | YARN localization | Rebuildable from source |
 | Models | `.models/` on the launcher host and query node | Setup scripts | Embedding archive, query node | Re-downloadable (pinned revisions) |
 | Rejected rows | `dead_letter/*.jsonl` on the driver host | Ingestion driver | Operators | Local disk only |
 | Exports | `exports/`, `/mnt/hgfs/copy_path/warcdb_csv/` | `export_csv.sh` | Analysts | Point-in-time copy |
-| Spark event logs | HDFS `/spark-logs/` | Spark | Spark History Server (TODO(team)) | Configured outside repo (Recorded) |
+| Spark event logs | HDFS `/spark-logs/` | Spark | Spark History Server: [[FILL: is a Spark History Server running, and on which host]] | Configured outside repo (Recorded) |
 
 ## 8. Concurrency control
 
@@ -163,13 +171,19 @@ YARN capacity is the practical limit on running stages at the same time (see
 [02 §4](02-hardware-and-infrastructure.md#4-yarn-container-budget-per-stage)).
 *(Verified in code; capacity limit Inferred)*
 
+The embedding lock key does not include `embedding_version`. A full re-embed under a
+new version therefore blocks the regular embedding run for as long as it lasts. This
+matters for the proposed hourly cycle ([§11](#11-prototype-vs-production-cluster)).
+*(Verified in code: [db/chunks.py](../db/chunks.py#L13-L25); impact noted in
+[archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.5)*
+
 ## 9. Scaling considerations
 
 | Dimension | Lever | Limit | Confidence |
 |---|---|---|---|
 | Ingestion throughput | More workers plus `--executor-instances` and `MAX_FILES_PER_ROUND` | At most one task per file per wave; the driver waits for the slowest file before committing the wave | Verified in code |
 | Processing throughput | `--executor-instances`, `--parallel-tasks`, `--items-per-task` | Commits are serialized in the driver; tagging is bounded by the LLM rate limit | Verified in code |
-| Embedding throughput | More executors; `EMBEDDING_BATCH_SIZE` | One ONNX thread per executor (fixed by the launcher); container memory of 1.5 GiB | Verified in code |
+| Embedding throughput | More executors; `EMBEDDING_BATCH_SIZE` | One ONNX thread per executor (fixed by the launcher); container memory of 1.5 GiB. New workers must have the same CPU instruction set as the existing ones, or vectors drift under one `embedding_version` ([02 §3.1](02-hardware-and-infrastructure.md#31-known-and-unknown-specifications)). | Verified in code; drift Recorded |
 | Query latency | `RAG_DB_CONCURRENCY`, `TOP_K`, `RERANKER_CANDIDATE_K` | Exact cosine search scans every vector of the selected version, so cost grows linearly with corpus size. The existing HNSW index uses `vector_ip_ops` and is not used by the cosine query. | Verified in code |
 | Database | Vertical scaling | Single PostgreSQL instance; no replicas or partitioning in repo | Verified in code (absence) |
 | Memory per task | `*_TASK_INPUT_BYTES`, `*_TASK_RESULT_BYTES`, `WORKER_MAX_*`, `MAX_HTML_BYTES`, `MAX_ARTICLE_BYTES` | Byte budgets bound payloads, not total process memory | Verified in code |
@@ -202,13 +216,18 @@ PostgreSQL semantics *(Inferred)*.
 *Source: [diagrams/src/03-prototype-vs-production.mmd](diagrams/src/03-prototype-vs-production.mmd)*
 
 Left: today, an operator launches each stage by hand on the master, and analysts query
-through the CLI. Right: the **proposed** production layout, where grey dashed nodes do
-not exist yet:
+through the CLI. Right: the **proposed** production layout. Grey dashed nodes do not
+exist yet. **Everything below is Proposed (not implemented).**
 
-- A long-running ingestion service watches the CC-NEWS manifest and reuses the existing checkpoint tables and coordinator lock.
-- A scheduler triggers chunking, tagging, and embeddings on a timetable or after each ingestion batch, using the same versioned, idempotent keys.
-- A FastAPI service in `query_service/` replaces the CLI as the query entry point.
-- Monitoring, alerting, a secrets manager, and database backups complete the operations layer.
+- **Hourly cycle.** A scheduler runs once an hour: it checks for new CC-NEWS WARC data, queues new links, and runs ingestion, chunking, tagging, and embeddings. It reuses the existing checkpoint tables, coordinator locks, and versioned, idempotent keys. Scheduler tool: [[FILL: which scheduler runs the hourly cycle]].
+- **Embeddings on Modal.** Embedding moves from the Spark workers to Modal, using an AVX2-only ONNX Runtime wheel so that any Modal host gives identical vectors. The local driver keeps database ownership: it reads pending chunks, sends text to Modal, and commits the returned vectors. Modal never connects to PostgreSQL. Whether this is decided is a blank in [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance).
+- **Version identity.** The ONNX Runtime build becomes part of `embedding_version`, and the embedding stage and the query path resolve the version the same way. A runtime change means a new version and a full re-embed, never mixed vectors.
+- **Query API.** A FastAPI service in `query_service/` replaces the CLI as the query entry point.
+- **Operations.** Monitoring, alerting, a secrets manager, and database backups complete the operations layer.
 
-Worker count and sizes for production are TODO(team). The per-module changes and the
-migration path are in [10-prototype-vs-production.md](10-prototype-vs-production.md).
+Sources: hourly cycle, Modal, and version identity from
+[archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md)
+§1, §6, and §7; query API from [archive/rag-api-plan.md](archive/rag-api-plan.md).
+Production sizes are blanks in
+[02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing). A
+per-module migration path is planned for document 10 (not written yet).

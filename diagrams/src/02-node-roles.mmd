@@ -2,8 +2,8 @@ flowchart LR
     M["Spark master"]:::svc
     W["3 workers"]:::svc
     SH[("Shared folder")]:::store
-    PG[("PostgreSQL: TODO")]:::proposed
-    QN["Query node: TODO"]:::proposed
+    PG[("PostgreSQL host")]:::proposed
+    QN["Query node"]:::proposed
 
     M --> W
     M -->|"CSV export"| SH

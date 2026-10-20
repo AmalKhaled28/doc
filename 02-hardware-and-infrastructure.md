@@ -7,9 +7,9 @@
 > **Read this first.** The repository contains no infrastructure-as-code: no Dockerfile,
 > Compose, Kubernetes, Hadoop or YARN configuration, VM definitions, or PostgreSQL
 > provisioning. This page lists what the repository does reveal, derives
-> **recommended minimums** from code settings, and marks every other value
-> **TODO(team)**. Use [Commands to collect real specs](#7-commands-to-collect-real-specs)
-> to fill in the gaps.
+> **recommended minimums** from code settings, and leaves every other value as a
+> `[[FILL]]` blank, listed in [FILL-IN.md](FILL-IN.md). Use
+> [Commands to collect real specs](#7-commands-to-collect-real-specs) to fill them in.
 
 ## 1. Evidence found in the repository
 
@@ -28,6 +28,8 @@
 | A VMware shared folder (HGFS) is mounted at `/mnt/hgfs/copy_path/` | Default destination in [scripts/export_csv.sh](../scripts/export_csv.sh#L11) | Verified in code (mount itself: Inferred) |
 | No GPU is used anywhere | Both ONNX sessions use `CPUExecutionProvider` only ([embeddings/embeddings.py](../embeddings/embeddings.py), [retrieval/reranker.py](../retrieval/reranker.py)) | Verified in code |
 | Spark 4.2.0 and PostgreSQL 18 were used in past validation | [archive/validation.md](archive/validation.md) | Recorded |
+| The local workspace host is an Intel i5-9500 with **AVX2 only** (no `avx512f` or `avx512_vnni` flags); its virtual environments use Python 3.13.5 | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §3 and §7.1 | Recorded |
+| BGE-M3 INT8 vectors differ between CPU instruction sets: same-text cosine about 0.985 between AVX2 and AVX-512/VNNI hosts, exact on the same AVX2 host | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §4.1 | Recorded (measured on Modal with ONNX Runtime 1.30.0) |
 
 ## 2. Node roles
 
@@ -37,17 +39,18 @@
 
 Solid nodes are confirmed by the repository: one Spark/YARN master, three 2 GiB worker
 VMs, and the VMware shared folder that receives CSV exports. Grey dashed nodes are
-required by the code, but their host is TODO(team), as is the HDFS NameNode's. The
-`localhost` database default suggests PostgreSQL ran on the master during development
-*(Inferred)*.
+required by the code, but where they run is a blank in
+[03 §2](03-cluster-design.md#2-node-roles-and-services), as is the HDFS NameNode's
+host. The `localhost` database default suggests PostgreSQL ran on the master during
+development *(Inferred)*.
 
 | Role | Responsibilities | Required software | Confidence |
 |---|---|---|---|
-| **Debian host** | Runs the VMs; runs `cluster_up.sh` / `cluster_down.sh` (not in repo) | VMware TODO(team) | Recorded |
-| **Spark/YARN master** | YARN ResourceManager; Spark driver for all four stages; launcher packaging; DB connections of every stage | Java, Spark, Hadoop client (`hdfs`), Python 3 + `.venv`, `zip`, `tar`, `sha256sum`, `curl`, `psql` | Verified in code (software); versions TODO(team) |
-| **Worker** (x3) | YARN NodeManager; runs one Spark executor container per core assigned | Java, Hadoop/YARN; the **same Python version and interpreter path** as the packed venv ([README.md](../README.md)) | Recorded / Inferred |
-| **PostgreSQL** | System of record for all data, checkpoints, and vectors | PostgreSQL with the pgvector extension | Verified in code; version TODO(team) |
-| **Query node** | Runs `scripts/ask.py` with both ONNX models in memory | Python 3 + `.venv-rag`, `.models/` | Verified in code; host TODO(team) |
+| **Debian host** | Runs the VMs; runs `cluster_up.sh` / `cluster_down.sh` (not in repo) | VMware: [[FILL: VMware product and version on the Debian host]] | Recorded |
+| **Spark/YARN master** | YARN ResourceManager; Spark driver for all four stages; launcher packaging; DB connections of every stage | Java, Spark, Hadoop client (`hdfs`), Python 3 + `.venv`, `zip`, `tar`, `sha256sum`, `curl`, `psql` | Verified in code (software). Spark and Hadoop versions: [01 §8](01-system-overview.md#8-technology-stack). Java: [[FILL: Java version on the master and workers]] |
+| **Worker** (x3) | YARN NodeManager; runs one Spark executor container per core assigned | Java, Hadoop/YARN; the **same Python version and interpreter path** as the packed venv ([README.md](../README.md)): [[FILL: Python version and interpreter path on each worker]] | Recorded / Inferred |
+| **PostgreSQL** | System of record for all data, checkpoints, and vectors | PostgreSQL with the pgvector extension | Verified in code. Versions: [01 §8](01-system-overview.md#8-technology-stack) |
+| **Query node** | Runs `scripts/ask.py` with both ONNX models in memory | Python 3 + `.venv-rag`, `.models/` | Verified in code. Host: [03 §2](03-cluster-design.md#2-node-roles-and-services) |
 
 ## 3. Sizing table
 
@@ -57,11 +60,29 @@ The Source column says where each value comes from.
 
 | Node role | Count | vCPU | RAM | Disk | Source |
 |---|---|---|---|---|---|
-| Debian host | 1 | TODO(team) | TODO(team) | TODO(team) | Count: code/config ([README.md](../README.md)). Specs: TODO(team) |
-| Spark/YARN master | 1 | TODO(team) | TODO(team) | TODO(team) | Count: code/config ([archive/validation.md](archive/validation.md)). Specs: TODO(team) |
-| Worker | 3 | TODO(team) | 2 GiB | TODO(team) | Count and RAM: code/config ([archive/validation.md](archive/validation.md), [.env.example](../.env.example)). vCPU, disk: TODO(team) |
-| PostgreSQL | TODO(team) | TODO(team) | TODO(team) | TODO(team) | TODO(team) |
-| Query node | TODO(team) | TODO(team) | TODO(team) | TODO(team) | TODO(team) |
+| Debian host | 1 | [[FILL: Debian host CPU core count]] | [[FILL: Debian host RAM]] | [[FILL: Debian host disk size]] | Count: code/config ([README.md](../README.md)). Specs: blanks |
+| Spark/YARN master | 1 | [[FILL: master VM vCPU count]] | [[FILL: master VM RAM]] | [[FILL: master VM disk size]] | Count: code/config ([archive/validation.md](archive/validation.md)). Specs: blanks |
+| Worker | 3 | [[FILL: worker VM vCPU count]] | 2 GiB | [[FILL: worker VM disk size]] | Count and RAM: code/config ([archive/validation.md](archive/validation.md), [.env.example](../.env.example)). vCPU, disk: blanks |
+| PostgreSQL | 1 | [[FILL: PostgreSQL host vCPU count]] | [[FILL: PostgreSQL host RAM]] | [[FILL: PostgreSQL host disk size and type]] | Count: one connection configuration in `_db_config()` ([db/db_handler.py](../db/db_handler.py#L16-L27)). Specs: blanks |
+| Query node | 1 | [[FILL: query node vCPU count]] | [[FILL: query node RAM]] | [[FILL: query node disk size]] | Count: `scripts/ask.py` runs as one local process. Specs: blanks |
+
+**CPU instruction set.** Embedding vectors depend on the CPU instruction set (see §1),
+so record it for every host that computes embeddings.
+
+| Host | CPU | Instruction set | Source |
+|---|---|---|---|
+| Local workspace host | Intel i5-9500 | AVX2 only | Recorded ([archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §3) |
+| Workers 1–3 (embed the corpus) | see next cell | [[FILL: CPU model and instruction set of worker1–3 (AVX2 or AVX-512)]] | `lscpu` on each worker (see §7) |
+| Query node (embeds each question) | its host is in [03 §2](03-cluster-design.md#2-node-roles-and-services) | Must give the same vectors as the workers | Requirement from [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.2 |
+
+> **Warning: do not mix CPU types for one embedding version.** `embedding_version`
+> fingerprints the model files, not the CPU ([01 §7](01-system-overview.md#7-version-keys-connecting-the-stages)).
+> If a worker with a different instruction set (for example AVX-512 instead of AVX2)
+> runs embedding tasks, its vectors are stored under the **same** `embedding_version` as
+> the others but are not identical to them. Nothing in the code detects this. Check
+> `lscpu` on every worker before adding it or running embeddings. *(Version contents:
+> Verified in code. Drift: Recorded in
+> [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §4)*
 
 ### 3.2 Recommended minimums — *Recommended, not measured*
 
@@ -122,7 +143,8 @@ container totals. The current three-worker cluster cannot satisfy that at the de
 | Query node | Groq or Google Gemini APIs | 443 / HTTPS | Planning and answering | Verified in code |
 | Setup host | `huggingface.co`, `pypi.org` | 443 / HTTPS | One-time model and package downloads | Verified in code |
 | Spark master | YARN ResourceManager | 8032 / TCP | Job submission | Recorded |
-| Spark master | HDFS NameNode | TODO(team) | Archive cache under `HDFS_APPS_DIR` | Verified in code (port: TODO(team)) |
+| Spark master | HDFS NameNode | see [03 §6](03-cluster-design.md#6-networking-and-ports) | Archive cache under `HDFS_APPS_DIR` | Verified in code (usage) |
+| Spark driver or executors (proposed) | Modal embedding endpoint | 443 / HTTPS, bearer token `MODAL_PROXY_TOKEN` | Send chunk text, receive vectors | Proposed (not implemented); [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.3 |
 | Spark driver | Executors | Spark driver and block-manager ports | Task dispatch and result collection | Inferred (Spark defaults; repo sets none) |
 
 Workers need outbound internet access for ingestion and tagging but **do not** need
@@ -145,8 +167,8 @@ PostgreSQL access. *(Verified in code)*
 
 ## 6. Estimation method
 
-There are no production targets yet. Production sizing is **TODO(team)**. This section
-explains how to extrapolate from the prototype snapshot once targets exist.
+There are no production targets yet: [[FILL: production target number of articles (A) and queries per hour]].
+This section explains how to extrapolate from the prototype snapshot once targets exist.
 
 ### 6.1 Prototype snapshot (baseline units)
 
@@ -197,14 +219,15 @@ Divide each total by the row count from `./scripts/inspect_db.sh` or `SELECT cou
 
 ### 6.3 Embedding time
 
-The repository records **no** embedding throughput measurement. *(TODO(team))*
+The repository records **no** embedding throughput measurement:
+[[FILL: measured embedding seconds per chunk (t) on the current cluster]].
 
 Method:
 
 1. Record a baseline: `./scripts/watch_embeddings.sh --once` (prints `eligible`, `embedded`).
 2. Run a bounded job and note the start and end times: `./scripts/run_embeddings.sh --embedding-limit 500`.
 3. Compute *t* = seconds ÷ 500 chunks for the cluster size used (default 2 executors, batch size 1, `max_length` 256, 1 ONNX thread).
-4. Estimate the full run as *A* × 5.07 × *t*. Throughput scales roughly with the number of executors until the driver or database becomes the bottleneck *(Inferred)*.
+4. Estimate the full run as *A* × 5.07 × *t*. Throughput scales roughly with the number of executors until the driver or database becomes the bottleneck *(Inferred)*. Add executors only on workers with the same CPU instruction set (see the warning in [§3.1](#31-known-and-unknown-specifications)).
 
 ### 6.4 LLM tagging cost and duration
 
@@ -225,7 +248,7 @@ The token estimate is the UTF-8 byte length of the prompt plus 600.
 | Requests | *A* × 5.07 × (1 + retry rate) |
 | Input tokens (upper bound) | requests × (template bytes + about 650-character chunk bytes) |
 | Output tokens (upper bound) | requests × 600 |
-| Cost | tokens × provider price — **TODO(team)**: model, tier, and price |
+| Cost | tokens × provider price. Default model `qwen/qwen3.8-27b` ([jobs/runtime.py](../jobs/runtime.py#L80)); tier and price: [[FILL: Groq account tier and price per million tokens for the tagging model]] |
 | Minimum duration at default pacing | *A* × 5.07 × 1.5 s ÷ parallel tasks (default 3) |
 
 Example: 2,000 articles is about 10,145 requests, or about 85 minutes at the default
@@ -237,16 +260,17 @@ assumes (see Known Issues).
 
 | Node role | Prototype (known or recommended) | Production |
 |---|---|---|
-| Spark/YARN master | 1 node; specs TODO(team); recommended 2 vCPU / 4 GiB / 40 GB | TODO(team) |
-| Workers | 3 × 2 GiB RAM; vCPU and disk TODO(team) | TODO(team) |
-| PostgreSQL | Host TODO(team); recommended 2 vCPU / 4 GiB / 20 GB SSD | TODO(team): size from §6.2 once article targets exist |
-| Query node | Host TODO(team); recommended 2 vCPU / 4 GiB / 5 GB | TODO(team): depends on query rate (none defined) |
-| Proposed production components (scheduler, FastAPI service, monitoring, backups) | Not present | TODO(team) |
+| Spark/YARN master | 1 node; specs in §3.1; recommended 2 vCPU / 4 GiB / 40 GB | [[FILL: production master size]] |
+| Workers | 3 × 2 GiB RAM; other specs in §3.1 | [[FILL: production worker count and size]] |
+| PostgreSQL | Specs in §3.1; recommended 2 vCPU / 4 GiB / 20 GB SSD | [[FILL: production PostgreSQL size]]. Derive it from §6.2 once the article target exists. |
+| Query node | Specs in §3.1; recommended 2 vCPU / 4 GiB / 5 GB | [[FILL: production query node size]]. Depends on the query rate. |
+| Embedding tier | Spark executors (above) | Proposed: Modal containers, starting with `max_containers=1` and measuring throughput ([archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.5). Depends on the Modal decision ([01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance)). |
+| Other proposed components (hourly scheduler, FastAPI service, monitoring, backups) | Not present | [[FILL: where the scheduler, FastAPI service, monitoring and backups will run]] |
 
 ## 7. Commands to collect real specs
 
-Run these on each VM (and on the host where applicable), then fill in the TODO(team)
-cells above. They are standard tools and are not part of the repository.
+Run these on each VM (and on the host where applicable), then fill in the blanks
+above. They are standard tools and are not part of the repository.
 
 ```bash
 # Operating system and hardware (every node)
@@ -254,6 +278,9 @@ lsb_release -a
 nproc
 free -h
 df -h
+
+# CPU model and instruction set (every node that computes embeddings)
+lscpu | grep -E 'Model name|Flags' | grep -oE 'Model name.*|avx2|avx512f|avx512_vnni' | sort -u
 
 # Hadoop / YARN / Spark (master)
 hdfs version
@@ -271,8 +298,10 @@ psql -d warcdb -c "SELECT version();"
 psql -d warcdb -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
 ```
 
-**Expected output:** one line or a small table per command. Record the results in this
-document's sizing table and in [11-roadmap-and-open-questions.md](11-roadmap-and-open-questions.md).
+**Expected output:** one line or a small table per command. For `lscpu`, a worker that
+prints `avx512f` or `avx512_vnni` is an AVX-512 host; one that prints only `avx2` is
+AVX2-only. Record the results in the blanks of this document and tick the rows in
+[FILL-IN.md](FILL-IN.md).
 
 **Troubleshooting**
 

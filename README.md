@@ -6,7 +6,7 @@ Common Crawl CC-NEWS archives, Apache Spark on YARN, and PostgreSQL with pgvecto
 
 This documentation set is the team's reference baseline. Every statement is traceable
 to a file in this repository or is explicitly labelled as inferred, proposed, or
-awaiting confirmation (see the [confidence legend](#confidence-legend)).
+awaiting confirmation (see the [confidence legend](#3-confidence-legend)).
 
 ---
 
@@ -38,7 +38,7 @@ All stages run as bounded, resumable batch commands today. See
 | Keep worker memory bounded | Count and byte budgets on every Spark task and result ([jobs/batching.py](../jobs/batching.py)) | Verified in code |
 | Allow reprocessing without data loss | Every derived table is keyed by a version (`chunking_version`, `analysis_version`, `embedding_version`) | Verified in code |
 | Answer questions only from evidence | Citation validation against retrieved chunk IDs ([retrieval/agent.py](../retrieval/agent.py)) | Verified in code |
-| Run continuously in production | Not implemented; see [10-prototype-vs-production.md](10-prototype-vs-production.md) | Proposed |
+| Run continuously in production | Not implemented. Proposed design: an hourly cycle, with embeddings on Modal; see [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance) and [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | Proposed (not implemented) |
 
 ## 3. Confidence legend
 
@@ -51,13 +51,13 @@ Statements, table cells, and diagram notes carry one of these labels where relev
 | **Inferred** | A reasonable conclusion from code or config, or a standard default of a third-party tool that the repository does not set explicitly. Verify before relying on it. |
 | **Recommended, not measured** | A sizing or configuration value derived from code settings. No benchmark in the repository backs it. |
 | **Proposed (not implemented)** | Part of the agreed production target design. No code exists for it yet. |
-| **TODO(team)** | Unknown. The team must confirm it. Never treat it as fact. All items are collected in [11-roadmap-and-open-questions.md](11-roadmap-and-open-questions.md). |
+| **\[\[FILL: \<what is missing\>\]\]** | Unknown. The team must answer it. Never treat it as fact. Every blank is listed, with the command that answers it, in [FILL-IN.md](FILL-IN.md). |
 
 ## 4. Quick start (prototype)
 
 This is a condensed path for an engineer who already has a working Spark/YARN cluster
-and a PostgreSQL database with pgvector. The full procedure, from bare hardware, is in
-[08-deployment-and-running.md](08-deployment-and-running.md).
+and a PostgreSQL database with pgvector. A full procedure from bare hardware is planned
+for document 08 (not written yet).
 
 **Prerequisites**
 
@@ -85,7 +85,10 @@ export PGHOST=localhost PGPORT=5432 PGDATABASE=warcdb PGUSER=warc_user PGPASSWOR
 .venv/bin/python -m pip install -r requirements/rag.txt
 ./scripts/run_chunking.sh --document-limit 100
 
-# 5. Embeddings (dedicated environment + local model; needs .models/bge-m3 first, see 08)
+# 5. Embeddings (dedicated environment + local model). The download script needs the base
+#    model files in .models/bge-m3 first: config.json, modules.json, tokenizer.json,
+#    tokenizer_config.json, sentencepiece.bpe.model, 1_Pooling/config.json.
+#    Source of those files: [[FILL: how to obtain the base .models/bge-m3 files]]
 bash scripts/setup_embedding_onnx_env.sh
 bash scripts/download_quantized_embedding_model.sh
 ./scripts/run_embeddings.sh --embedding-limit 100
@@ -117,7 +120,8 @@ meet the target (shortfall). *(Verified in code)*
 |---|---|---|
 | `Missing virtual environment: ... install requirements/base.txt in .venv or set VENV_DIR.` | `.venv` not created | Run step 1, or set `VENV_DIR` |
 | `another ingestion coordinator is active for 2026/05` | Another ingestion driver holds the advisory lock | Wait for it to finish, or stop it |
-| `Missing INT8 embedding model or tokenizer in ...` | Model not downloaded | Follow the embedding model steps in [08-deployment-and-running.md](08-deployment-and-running.md) |
+| `Missing INT8 embedding model or tokenizer in ...` | Model not downloaded | Run `bash scripts/setup_embedding_onnx_env.sh`, then `bash scripts/download_quantized_embedding_model.sh` (step 5) |
+| `Base model metadata is incomplete: .../.models/bge-m3/...` | Base model files missing | Put the six base files listed in step 5 into `.models/bge-m3` |
 | `GROQ_API_KEY is required ...` | Key not exported or not in `.env` | Export `GROQ_API_KEY` |
 
 ## 5. Documentation map
@@ -127,25 +131,26 @@ meet the target (shortfall). *(Verified in code)*
 | [01-system-overview.md](01-system-overview.md) | Purpose, scope, context and component diagrams, component map, tech stack | Batch 1 |
 | [02-hardware-and-infrastructure.md](02-hardware-and-infrastructure.md) | Hardware evidence, sizing per node role, network and storage needs, estimation method | Batch 1 |
 | [03-cluster-design.md](03-cluster-design.md) | Node roles, workload placement, ports, artifact distribution, scaling, failure handling | Batch 1 |
-| [04-modules/](04-modules/) | One file per module: ingestion, chunking, tagging, embeddings, retrieval, db, jobs, scripts, query_service | Pending |
-| [05-data-flow.md](05-data-flow.md) | End-to-end flow with payload formats and schemas | Pending |
-| [06-database.md](06-database.md) | Tables, keys, indexes, ER diagram, retention, read/write ownership | Pending |
-| [07-configuration.md](07-configuration.md) | Every environment variable, flag, config file, and secret | Pending |
-| [08-deployment-and-running.md](08-deployment-and-running.md) | Bare hardware to a running system, step by step | Pending |
-| [09-operations.md](09-operations.md) | Monitoring, logs, troubleshooting, backup and recovery | Pending |
-| [10-prototype-vs-production.md](10-prototype-vs-production.md) | Per-module comparison and migration path | Pending |
-| [11-roadmap-and-open-questions.md](11-roadmap-and-open-questions.md) | Known issues, limitations, TODO(team) list | Pending |
+| [FILL-IN.md](FILL-IN.md) | Every open question for the team, with the place it belongs and how to answer it | Living list |
+| 04-modules/ | One file per module: ingestion, chunking, tagging, embeddings, retrieval, db, jobs, scripts, query_service | Planned (not written yet) |
+| 05-data-flow.md | End-to-end flow with payload formats and schemas | Planned (not written yet) |
+| 06-database.md | Tables, keys, indexes, ER diagram, retention, read/write ownership | Planned (not written yet) |
+| 07-configuration.md | Every environment variable, flag, config file, and secret | Planned (not written yet) |
+| 08-deployment-and-running.md | Bare hardware to a running system, step by step | Planned (not written yet) |
+| 09-operations.md | Monitoring, logs, troubleshooting, backup and recovery | Planned (not written yet) |
+| 10-prototype-vs-production.md | Per-module comparison and migration path | Planned (not written yet) |
+| 11-roadmap-and-open-questions.md | Known issues and limitations | Planned (not written yet) |
 
 ### Diagrams
 
 Documents show each diagram once, as an SVG image from [diagrams/](diagrams/), so it
 renders in any Markdown viewer. The Mermaid source of each diagram is a separate file
 in [diagrams/src/](diagrams/src/), linked in the italic "Source:" note under the image.
-The source file is the source of truth. After editing one, regenerate the SVGs from the
-project root:
+The source file is the source of truth. After editing one, regenerate the SVGs from this
+documentation folder:
 
 ```bash
-bash docs/diagrams/build.sh
+bash diagrams/build.sh
 ```
 
 **Prerequisites:** Node.js with `npx`. The first run downloads `@mermaid-js/mermaid-cli`
@@ -159,7 +164,7 @@ non-zero if any is missing.
 
 **Adding a diagram:**
 
-1. Create `docs/diagrams/src/<name>.mmd`, named `<doc number>-<topic>`.
+1. Create `diagrams/src/<name>.mmd`, named `<doc number>-<topic>`.
 2. Run the build script.
 3. In the document, add the image link `![Title](diagrams/<name>.svg)` (use `../diagrams/` from `04-modules/`), the italic source note, and a 2–3 sentence explanation.
 
@@ -168,10 +173,9 @@ Do not put Mermaid code blocks in the `.md` files.
 ### Detailed legacy references
 
 The documents below predate this baseline and were moved, unchanged in content, to
-[archive/](archive/). They hold useful detail, but some statements are outdated. The
-Known Issues table in [11-roadmap-and-open-questions.md](11-roadmap-and-open-questions.md)
-lists every known discrepancy. Where this baseline and an archived document disagree,
-this baseline wins.
+[archive/](archive/). They hold useful detail, but some statements are outdated. A
+Known Issues list is planned for document 11 (not written yet). Where this baseline and
+an archived document disagree, this baseline wins.
 
 | Legacy document | Topic |
 |---|---|
@@ -182,6 +186,7 @@ this baseline wins.
 | [archive/validation.md](archive/validation.md) | Recorded local and YARN validation runs (2026-09-30 and 2026-10-01) |
 | [archive/rag-api-plan.md](archive/rag-api-plan.md) | Plan for the RAG evaluation baseline and FastAPI service |
 | [archive/retrieval-chatbot-design.md](archive/retrieval-chatbot-design.md) | Retrieval and chatbot design decisions |
+| [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) | Embedding drift across CPU instruction sets, the proposed move of embeddings to Modal with an AVX2-only ONNX Runtime wheel, and the hourly-cycle plan (2026-10-20; copied unchanged from the team's `docs/`) |
 
 ## 6. Glossary
 

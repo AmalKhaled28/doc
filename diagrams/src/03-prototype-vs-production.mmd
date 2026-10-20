@@ -1,13 +1,13 @@
 flowchart TD
     subgraph PROD["Production: proposed"]
-        S1["Scheduler"]:::proposed
-        S2["Ingestion service"]:::proposed
-        S3["Spark cluster"]:::svc
+        S1["Hourly scheduler"]:::proposed
+        S2["Spark cluster"]:::svc
+        S3["Modal embeddings"]:::proposed
         S4[("PostgreSQL + backups")]:::store
         S5["Query API"]:::proposed
-        S1 --> S3
-        S2 --> S3
-        S3 --> S4
+        S1 --> S2
+        S2 -->|"chunk text"| S3
+        S2 --> S4
         S5 --> S4
     end
 
