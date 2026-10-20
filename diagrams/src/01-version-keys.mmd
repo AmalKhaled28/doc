@@ -1,0 +1,18 @@
+flowchart LR
+    CH["Chunking"]:::svc
+    CK[("Text chunks")]:::store
+    TG["Tagging"]:::svc
+    EM["Embeddings"]:::svc
+    VE[("Vectors")]:::store
+    RT["Retrieval"]:::svc
+
+    CH -->|"chunking version"| CK
+    CK --> TG
+    CK --> EM
+    EM -->|"embedding version"| VE
+    VE --> RT
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef proposed fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray:5 5,color:#616161

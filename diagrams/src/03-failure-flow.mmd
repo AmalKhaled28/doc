@@ -1,0 +1,18 @@
+flowchart LR
+    F["Task fails"]:::svc
+    Q["Groq quota hit"]:::ext
+    D["Drain siblings"]:::svc
+    C[("Commit finished work")]:::store
+    E1["Exit 1"]:::svc
+    E2["Exit 2"]:::svc
+    R["Operator reruns"]:::ext
+
+    F --> D --> C
+    Q --> C
+    C -->|"task failed"| E1 --> R
+    C -->|"quota hit"| E2 --> R
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef proposed fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray:5 5,color:#616161

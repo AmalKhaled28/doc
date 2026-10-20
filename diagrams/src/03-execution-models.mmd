@@ -1,0 +1,20 @@
+flowchart LR
+    subgraph ING["Ingestion: execute_batch"]
+        I1["One wave job"]:::svc
+        I2["Wait for all files"]:::svc
+        I3[("Commit in order")]:::store
+        I1 --> I2 --> I3
+    end
+    subgraph PRO["Other stages: run_waves"]
+        P1["Thread pool"]:::svc
+        P2["Single-task jobs"]:::svc
+        P3[("Commit each result")]:::store
+        P1 --> P2 --> P3
+    end
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef proposed fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray:5 5,color:#616161
+    style ING fill:#FFFFFF,stroke:#BDBDBD
+    style PRO fill:#FFFFFF,stroke:#BDBDBD
