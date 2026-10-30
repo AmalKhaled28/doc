@@ -1,6 +1,6 @@
 flowchart TD
     subgraph PROD["Production: proposed"]
-        S1["Hourly scheduler"]:::proposed
+        S1["Airflow DAG"]:::proposed
         S2["Spark cluster"]:::svc
         S3["Modal embeddings"]:::proposed
         S4[("PostgreSQL + backups")]:::store

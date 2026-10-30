@@ -22,12 +22,15 @@ with citations to the stored chunks.
 | CPU embedding with BGE-M3 INT8 ONNX into pgvector | Verified in code |
 | CLI RAG agent: query planning, exact cosine search, cross-encoder reranking, cited answers | Verified in code |
 | Database inspection, CSV export, and embedding progress monitoring | Verified in code |
+| Article metadata enrichment: structured dates, publisher, section, keywords, canonical URL ([14](14-article-metadata-and-deduplication.md)) | Verified in code |
+| Automatic relaunch of ingestion, and ingestion alerts through Telegram ([13](13-ingestion-operations.md)) | Verified in code (watchdog on the `airflow_migration` branch only) |
 
 | Out of scope today | Status |
 |---|---|
-| Continuous or scheduled operation of any stage | Proposed (not implemented) |
+| Scheduled operation of any stage | Airflow services exist, but no DAG runs a stage ([12](12-airflow-and-python-migration.md)). Pipeline DAGs: Proposed (not implemented) |
+| Article deduplication | Columns exist, but nothing detects or skips duplicates ([14 §6](14-article-metadata-and-deduplication.md#6-deduplication-status)) |
 | HTTP query API (`query_service/` is an empty package) | Proposed (not implemented) |
-| Monitoring, alerting, secrets management, backups | Proposed (not implemented) |
+| Monitoring, secrets management, backups, and alerting beyond ingestion | Proposed (not implemented) |
 | Infrastructure provisioning (VMs, Hadoop, PostgreSQL) | Not in repository; kept in [[FILL: where VM, Hadoop and PostgreSQL provisioning is kept]] |
 | Arabic dialect identification (`metadata.arabic_dialect` is always `NULL`) | Not implemented (Verified in code: `_candidate` in [ingestion/pipeline.py](../ingestion/pipeline.py)) |
 | Languages other than Arabic, English, French | Excluded by design (Verified in code: [ingestion/text.py](../ingestion/text.py)) |
@@ -107,7 +110,7 @@ A detailed page per module is planned for 04-modules (not written yet). Until th
 | Bounded memory | Item, input-byte, and result-byte limits per task; HTML and article size caps | [jobs/runtime.py](../jobs/runtime.py), [ingestion/pipeline.py](../ingestion/pipeline.py) |
 | Idempotent commits | Ingestion chunk receipts; `ON CONFLICT` keys; hash checks on chunks and vectors | [db/](../db/) stores |
 | Versioned derived data | New version strings produce new rows instead of overwriting | `CHUNKING_VERSION`, `analysis_version`, `model_version()` |
-| Resumability | Re-running a stage selects only rows missing for the current version; ingestion resumes by `RESUME_RUN_ID` | stage stores, `restore_run_config` |
+| Resumability | Re-running a stage selects only rows missing for the current version; ingestion resumes by `RESUME_RUN_ID`, and a new run continues from the file checkpoints in `ingest_files` | stage stores, `restore_run_config`, `create_run` |
 | No hidden fallbacks | Missing model files, hash drift, or quota overflow raise errors instead of degrading | [retrieval/reranker.py](../retrieval/reranker.py), [db/chunks.py](../db/chunks.py) |
 
 All rows above are *Verified in code*.
@@ -156,6 +159,7 @@ bge-m3-int8-9fb3afc85bfa0f8662dd`. *(Verified from exports/chunk_embeddings.csv)
 |---|---|---|---|
 | Language | Python 3; Bash | 3.13.5 in the local `.venv`, `.venv-embedding-onnx`, and `.venv-rag` (Recorded); 3.12 in the Modal image (Verified in code) | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.1; `python_version="3.12"` in [scripts/modal_embedding_app.py](../scripts/modal_embedding_app.py#L44) |
 | Processing | Apache Spark on YARN (client mode), HDFS | Spark 4.2.0 recorded; Hadoop [[FILL: Hadoop version on the cluster]] | [scripts/run_processing.sh](../scripts/run_processing.sh); [archive/validation.md](archive/validation.md) |
+| Orchestration | Apache Airflow (systemd services; no pipeline DAG yet) | 3.3.2 recorded | [archive/airflow-migration.md](archive/airflow-migration.md); [12](12-airflow-and-python-migration.md) |
 | Database | PostgreSQL + pgvector | PostgreSQL 18 recorded in tests; live server [[FILL: PostgreSQL server version on the live database]]; pgvector [[FILL: pgvector extension version]] | [db/vector_schema.py](../db/vector_schema.py); [archive/validation.md](archive/validation.md) |
 | WARC parsing | FastWARC | `==1.0.9` | [requirements/base.txt](../requirements/base.txt) |
 | Extraction | trafilatura, selectolax, charset-normalizer | `>=2,<3`; `>=0.3,<0.5`; `>=3.4,<4` | [requirements/base.txt](../requirements/base.txt) |
@@ -189,10 +193,10 @@ imports uvicorn or langdetect. *(Verified in code)*
 
 | Aspect | Prototype (today) | Production (Proposed, not implemented) |
 |---|---|---|
-| Trigger | Operator runs each stage script by hand (`run_ingestion.sh` with quotas, then chunking, tagging, embeddings) | An **hourly cycle**: check for new CC-NEWS WARC data, queue new links, then run ingestion, chunking, tagging, and embeddings |
+| Trigger | Operator runs each stage script by hand (`run_ingestion.sh` with quotas, then chunking, tagging, embeddings). A supervisor can relaunch ingestion ([13](13-ingestion-operations.md)) | An **Airflow DAG** runs ingestion, chunking, tagging, and embeddings ([12](12-airflow-and-python-migration.md)). The earlier design calls for an **hourly cycle** that checks for new CC-NEWS WARC data and queues new links |
 | Embedding runtime | Spark executors on the workers, stock ONNX Runtime on CPU | **Modal**, with an AVX2-only ONNX Runtime wheel so every host computes identical vectors. The local driver still reads pending chunks and commits vectors; Modal stays stateless. Decision status: [[FILL: is moving embeddings to Modal decided]] |
 | Query interface | `scripts/ask.py` CLI | FastAPI service in `query_service/` wrapping `retrieval.answer()` |
-| Observability | stdout, Spark UI, `inspect_db.sh`, `watch_embeddings.sh` | Metrics, dashboards, alerting |
+| Observability | stdout, Spark UI, `inspect_db.sh`, `watch_embeddings.sh`, Telegram alerts for ingestion | Metrics, dashboards, alerting across all stages |
 | Secrets | `.env` file and environment variables | Secrets manager (adds the Modal proxy token, `MODAL_PROXY_TOKEN`) |
 | Backups | None in repository | Scheduled PostgreSQL backups |
 
@@ -200,7 +204,9 @@ Sources: the hourly cycle and the Modal design are from
 [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md)
 §1, §6, and §7. That document is a decision record, not code: the embedding stage still
 runs on Spark, and the Modal scripts in `scripts/modal_*.py` are investigation and
-validation tools only. The cluster-level view is in
+validation tools only. The Airflow decision is from
+[archive/airflow-migration.md](archive/airflow-migration.md), which does not mention the
+hourly cycle or Modal. The cluster-level view is in
 [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster).
 
 ## 10. Conventions

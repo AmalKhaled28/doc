@@ -1,0 +1,12 @@
+sequenceDiagram
+    participant W as Watchdog
+    participant T as Telegram
+    participant O as Operator
+    participant N as Worker
+    W->>T: Ask with nonce
+    T->>O: Show question
+    O->>T: Reply with nonce
+    W->>T: Poll up to 20 min
+    T-->>W: Approved
+    W->>N: Run cleanup
+    W->>T: Report result

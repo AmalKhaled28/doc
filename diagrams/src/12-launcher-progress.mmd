@@ -1,0 +1,15 @@
+flowchart LR
+    A["Parse stage"]:::svc
+    B["Load .env"]:::svc
+    C["Pick venv"]:::svc
+    D["Package code"]:::proposed
+    E["Publish to HDFS"]:::proposed
+    F["Submit to Spark"]:::proposed
+    G["Return exit code"]:::proposed
+
+    A --> B --> C --> D --> E --> F --> G
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100
+    classDef proposed fill:#F5F5F5,stroke:#9E9E9E,stroke-dasharray:5 5,color:#616161

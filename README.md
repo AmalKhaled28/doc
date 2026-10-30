@@ -38,7 +38,7 @@ All stages run as bounded, resumable batch commands today. See
 | Keep worker memory bounded | Count and byte budgets on every Spark task and result ([jobs/batching.py](../jobs/batching.py)) | Verified in code |
 | Allow reprocessing without data loss | Every derived table is keyed by a version (`chunking_version`, `analysis_version`, `embedding_version`) | Verified in code |
 | Answer questions only from evidence | Citation validation against retrieved chunk IDs ([retrieval/agent.py](../retrieval/agent.py)) | Verified in code |
-| Run continuously in production | Not implemented. Proposed design: an hourly cycle, with embeddings on Modal; see [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance) and [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | Proposed (not implemented) |
+| Run continuously in production | Started, not finished. Airflow services run on the master, but no DAG runs the pipeline yet ([12](12-airflow-and-python-migration.md)). Proposed design: an hourly cycle, with embeddings on Modal; see [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance) and [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | Proposed (not implemented) |
 
 ## 3. Confidence legend
 
@@ -140,6 +140,13 @@ meet the target (shortfall). *(Verified in code)*
 | 09-operations.md | Monitoring, logs, troubleshooting, backup and recovery | Planned (not written yet) |
 | 10-prototype-vs-production.md | Per-module comparison and migration path | Planned (not written yet) |
 | 11-roadmap-and-open-questions.md | Known issues and limitations | Planned (not written yet) |
+| [12-airflow-and-python-migration.md](12-airflow-and-python-migration.md) | Airflow deployment, the planned DAGs, launcher progress, phases, command changes | Added 2026-10-30 |
+| [13-ingestion-operations.md](13-ingestion-operations.md) | Failed-file recycling, ingest supervisor, ops watchdog, Telegram, real run scale | Added 2026-10-30 |
+| [14-article-metadata-and-deduplication.md](14-article-metadata-and-deduplication.md) | New extraction fields, database columns, canonical URLs, deduplication status | Added 2026-10-30 |
+
+Documents 12–14 cover the team's changes of 2026-10-25 to 2026-10-29, read from
+`origin/master` (`d794b8c`) and `origin/airflow_migration` (`e668b69`). Their content can
+move into documents 06, 09, and 10 when those are written.
 
 ### Diagrams
 
@@ -187,6 +194,8 @@ an archived document disagree, this baseline wins.
 | [archive/rag-api-plan.md](archive/rag-api-plan.md) | Plan for the RAG evaluation baseline and FastAPI service |
 | [archive/retrieval-chatbot-design.md](archive/retrieval-chatbot-design.md) | Retrieval and chatbot design decisions |
 | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) | Embedding drift across CPU instruction sets, the proposed move of embeddings to Modal with an AVX2-only ONNX Runtime wheel, and the hourly-cycle plan (2026-10-20; copied unchanged from the team's `docs/`) |
+| [archive/airflow-migration.md](archive/airflow-migration.md) | Plan for moving from shell scripts to Python and Airflow (2026-10-26; copied unchanged from the team's `docs/`) |
+| [archive/shell-to-python-step-by-step.md](archive/shell-to-python-step-by-step.md) | Step-by-step build guide for the same migration (2026-10-29; copied unchanged from the `airflow_migration` branch) |
 
 ## 6. Glossary
 
@@ -216,5 +225,10 @@ Terms are used with exactly these meanings across all documents.
 | **Coordinator lock** | A PostgreSQL session advisory lock that allows one active driver per stage. |
 | **Dead letter** | JSONL file in `dead_letter/` (or `DEAD_LETTER_DIR`) holding article rows the database rejected. |
 | **Evidence** | Retrieved, reranked, deduplicated chunk text with its sources, passed to the answering LLM. |
-| **Prototype mode** | How the system runs today: manually launched, bounded batch commands. |
+| **Prototype mode** | How the system runs today: manually launched, bounded batch commands, with optional ingestion supervision. |
 | **Production mode** | The proposed target: continuous ingestion, scheduled processing, an HTTP query service, and full operations tooling. Not implemented. |
+| **DAG** | Directed acyclic graph: Airflow's name for a pipeline of ordered tasks. |
+| **Supervisor** | `scripts/supervise_ingest.py`: a background program that relaunches ingestion when the driver stops. |
+| **Watchdog** | `scripts/ops_watchdog.py`: a background program that keeps the supervisor running and alerts through Telegram. |
+| **Recycling** | Returning failed ingestion files to `pending` within one invocation. |
+| **Canonical key** | Normalized form of an article's URL, used to compare pages (`pages.canonical_key`). |

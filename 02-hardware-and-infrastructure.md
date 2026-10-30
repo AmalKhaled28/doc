@@ -30,6 +30,11 @@
 | Spark 4.2.0 and PostgreSQL 18 were used in past validation | [archive/validation.md](archive/validation.md) | Recorded |
 | The local workspace host is an Intel i5-9500 with **AVX2 only** (no `avx512f` or `avx512_vnni` flags); its virtual environments use Python 3.13.5 | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §3 and §7.1 | Recorded |
 | BGE-M3 INT8 vectors differ between CPU instruction sets: same-text cosine about 0.985 between AVX2 and AVX-512/VNNI hosts, exact on the same AVX2 host | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §4.1 | Recorded (measured on Modal with ONNX Runtime 1.30.0) |
+| Worker addresses are `192.168.56.11`, `.12`, `.13`, reached over SSH as user `worker` | `WORKERS` and `worker_free_gb` in `scripts/ops_watchdog.py` (`airflow_migration` branch) | Verified in code |
+| The master runs Spark from `/opt/spark`, Hadoop from `/opt/hadoop`, and Java 21 as user `spark-master` | [airflow/systemd/](../airflow/systemd/) unit files; Java 21.0.12 and a Debian 13 kernel in the committed `ingest_resume.log` (2026-10-21) | Verified in code; versions Recorded |
+| Airflow runs on the master, with its own venv in `/home/spark-master/airflow-venv` | [airflow/systemd/](../airflow/systemd/) unit files | Verified in code |
+| PostgreSQL runs on the same machine as Airflow | The Airflow units start after `postgresql@18-main.service`; the smoke test checks `localhost:5432` | Inferred; see D01 in [FILL-IN.md](FILL-IN.md) |
+| A real month is about 2.4 million articles and 0.35 TiB of WARC data, far above the 2,000-article snapshot in §6.1 | [13 §2](13-ingestion-operations.md#2-scale-of-real-runs) | Recorded |
 
 ## 2. Node roles
 
@@ -173,7 +178,10 @@ This section explains how to extrapolate from the prototype snapshot once target
 ### 6.1 Prototype snapshot (baseline units)
 
 Measured from the CSV files in [exports/](../exports/) with a CSV parser (multi-line
-text fields are counted correctly).
+text fields are counted correctly). This snapshot predates the full-month runs in
+[13 §2](13-ingestion-operations.md#2-scale-of-real-runs) and the new `html_meta` column
+([14 §4](14-article-metadata-and-deduplication.md#4-bounds-on-html_meta)), which adds up
+to 32 KiB per article.
 
 | Quantity | Value | Derived unit |
 |---|---:|---|
@@ -265,6 +273,7 @@ assumes (see Known Issues).
 | PostgreSQL | Specs in §3.1; recommended 2 vCPU / 4 GiB / 20 GB SSD | [[FILL: production PostgreSQL size]]. Derive it from §6.2 once the article target exists. |
 | Query node | Specs in §3.1; recommended 2 vCPU / 4 GiB / 5 GB | [[FILL: production query node size]]. Depends on the query rate. |
 | Embedding tier | Spark executors (above) | Proposed: Modal containers, starting with `max_containers=1` and measuring throughput ([archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) §7.5). Depends on the Modal decision ([01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance)). |
+| Airflow | On the master ([12 §3](12-airflow-and-python-migration.md#3-airflow-deployment-today)); adds three services to the sizing above, not measured | See the row below |
 | Other proposed components (hourly scheduler, FastAPI service, monitoring, backups) | Not present | [[FILL: where the scheduler, FastAPI service, monitoring and backups will run]] |
 
 ## 7. Commands to collect real specs

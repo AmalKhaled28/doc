@@ -26,7 +26,7 @@ blanks in [§2](#2-node-roles-and-services); ports are in [§6](#6-networking-an
 
 | Node | Services | Stage role | Confidence |
 |---|---|---|---|
-| spark-master | YARN ResourceManager (`:8032`); Spark driver of every stage; launcher packaging; `inspect_db.sh`, `export_csv.sh`, `watch_embeddings.sh` | Coordinator and sole database writer | ResourceManager: Recorded. Driver placement: Verified in code (client mode) |
+| spark-master | YARN ResourceManager (`:8032`); Spark driver of every stage; launcher packaging; `inspect_db.sh`, `export_csv.sh`, `watch_embeddings.sh`; Airflow services ([12](12-airflow-and-python-migration.md)); ingest supervisor and ops watchdog ([13](13-ingestion-operations.md)) | Coordinator and sole database writer | ResourceManager: Recorded. Driver placement and Airflow units: Verified in code (client mode) |
 | worker1–3 | YARN NodeManager; Spark executors | Pure transforms: WARC parsing, cleaning and splitting, LLM calls, ONNX inference | Recorded (names); Verified in code (behavior) |
 | HDFS NameNode / DataNodes | HDFS | Archive cache and event logs | Verified in code (usage). Placement: [[FILL: hosts that run the HDFS NameNode and DataNodes]] |
 | PostgreSQL host | PostgreSQL + pgvector | System of record | Placement: [[FILL: host that runs PostgreSQL]] |
@@ -62,7 +62,8 @@ blanks in [§2](#2-node-roles-and-services); ports are in [§6](#6-networking-an
 | Setting | Value | Applies to | Source |
 |---|---|---|---|
 | `--master` / `--deploy-mode` | `yarn` / `client` | all | [scripts/run_processing.sh](../scripts/run_processing.sh) |
-| `spark.executor.cores` | `1` | all | same |
+| `spark.executor.cores` | `SPARK_EXECUTOR_CORES`, default `1` | all | same |
+| `spark.yarn.am.memory` / `spark.yarn.am.memoryOverhead` | `SPARK_YARN_AM_MEMORY`, default `512m` / `SPARK_YARN_AM_MEMORY_OVERHEAD`, default `384m` | all | same |
 | `spark.executor.instances` | resolved count (see §3.1) | all | same |
 | `spark.dynamicAllocation.enabled` | `false` | all | same |
 | `spark.driver.maxResultSize` | `64m` | all | same |
@@ -134,8 +135,9 @@ one CPU instruction set, or the same model gives different vectors under one
 | [[FILL: HDFS NameNode RPC port (fs.defaultFS)]] | HDFS NameNode RPC | NameNode host ([§2](#2-node-roles-and-services)) | Launcher (`hdfs dfs`), YARN localization | `hdfs://` URIs in code carry no host or port, so the cluster's `fs.defaultFS` setting decides (Verified in code) |
 | 4040/TCP | Spark application UI | spark-master (driver) | Operators | Inferred (Spark default; not set in repo) |
 | 8088/TCP | YARN ResourceManager web UI | spark-master | Operators | Inferred (Hadoop default; not set in repo) |
+| 8080/TCP | Airflow API server and web UI | spark-master | Operators | Inferred (Airflow default; not set in repo, and `airflow.env` could override it) |
 | ephemeral | Spark driver RPC and block manager | spark-master ↔ workers | Executors | Inferred (Spark default). Firewall: [[FILL: firewall rules between the master and the workers]] |
-| 443/TCP outbound | HTTPS | workers, master, query node | Common Crawl, Groq, Gemini, Hugging Face, PyPI | Verified in code |
+| 443/TCP outbound | HTTPS | workers, master, query node | Common Crawl, Groq, Gemini, Hugging Face, PyPI, and Telegram (master only) | Verified in code |
 
 **Network rules implied by the code:**
 
@@ -193,12 +195,12 @@ matters for the proposed hourly cycle ([§11](#11-prototype-vs-production-cluste
 | Failure | Ingestion behavior | Processing stages behavior | Recovery action |
 |---|---|---|---|
 | Transient HTTP error (408, 429, 5xx, timeout) | Worker retries up to `MAX_RETRIES` with backoff `min(30, 2^(n+1))` seconds | n/a (tagging has its own 5-attempt loop) | Automatic |
-| Non-transient worker error | Error result committed; file marked `failed`; run ends `failed`, exit 1 | Task fails (`maxFailures=1`); siblings drained; job exits 1 | Ingestion: `RESUME_RUN_ID=<id>` makes failed files eligible again. Processing: rerun the same command. |
+| Non-transient worker error | Error result committed; file marked `failed`. The run continues; it ends `failed`, exit 1, after 3 consecutive failed waves with no commits, or when failed files remain and recycling cannot help ([13 §3](13-ingestion-operations.md#3-failed-file-recycling-in-the-ingestion-driver)) | Task fails (`maxFailures=1`); siblings drained; job exits 1 | Ingestion: automatic recycling, up to 4 times per invocation, while Common Crawl answers. Afterwards `RESUME_RUN_ID=<id>` makes failed files eligible again. Processing: rerun the same command. |
 | Source file changed (ETag or Last-Modified mismatch) | `IOError`, file marked `failed` | n/a | Investigate the source; resume |
 | Server ignores HTTP Range | Replays the stream from byte 0 and skips to the saved record boundary | n/a | Automatic (slower) |
 | Commit error or lost acknowledgement | Up to `MAX_RETRIES` attempts; reconnects and re-takes the lock; chunk receipt prevents double insert | Idempotent keys; hash conflicts raise errors | Automatic, or rerun |
 | Malformed article row | Savepoint isolates it; row written to `dead_letter/` | n/a | Inspect the JSONL file |
-| Driver crash | Uncommitted wave lost; run may stay `running` | Up to `parallel_tasks` uncommitted batches lost (LLM calls may be billed again) | Ingestion: resume by run ID. Processing: rerun. |
+| Driver crash | Uncommitted wave lost; run may stay `running` | Up to `parallel_tasks` uncommitted batches lost (LLM calls may be billed again) | Ingestion: resume by run ID, or automatic if the supervisor is running ([13 §4](13-ingestion-operations.md#4-ingest-supervisor)). Processing: rerun. |
 | Worker node lost | Spark task retry (default count, Inferred), then worker-level retry | Job fails (`maxFailures=1`) | Rerun |
 | Groq daily quota or wait over 15 minutes | n/a | Completed outcomes committed; later waves stop; exit 2 | Rerun after the quota resets |
 | HDFS unavailable | Archives shipped per job from local disk | same | Automatic |
@@ -217,13 +219,15 @@ PostgreSQL semantics *(Inferred)*.
 
 Left: today, an operator launches each stage by hand on the master, and analysts query
 through the CLI. Right: the **proposed** production layout. Grey dashed nodes do not
-exist yet. **Everything below is Proposed (not implemented).**
+exist yet: the Airflow services already run, but the DAG that drives the pipeline does
+not ([12](12-airflow-and-python-migration.md)). **Everything below is Proposed (not
+implemented).**
 
-- **Hourly cycle.** A scheduler runs once an hour: it checks for new CC-NEWS WARC data, queues new links, and runs ingestion, chunking, tagging, and embeddings. It reuses the existing checkpoint tables, coordinator locks, and versioned, idempotent keys. Scheduler tool: [[FILL: which scheduler runs the hourly cycle]].
+- **Hourly cycle.** A scheduler runs once an hour: it checks for new CC-NEWS WARC data, queues new links, and runs ingestion, chunking, tagging, and embeddings. It reuses the existing checkpoint tables, coordinator locks, and versioned, idempotent keys. Scheduler tool: Airflow 3.3.2 (Recorded: [archive/airflow-migration.md](archive/airflow-migration.md)). The team's Airflow plan gives no schedule, so the hourly cadence is not confirmed; see [12 §4](12-airflow-and-python-migration.md#4-target-pipeline).
 - **Embeddings on Modal.** Embedding moves from the Spark workers to Modal, using an AVX2-only ONNX Runtime wheel so that any Modal host gives identical vectors. The local driver keeps database ownership: it reads pending chunks, sends text to Modal, and commits the returned vectors. Modal never connects to PostgreSQL. Whether this is decided is a blank in [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance).
 - **Version identity.** The ONNX Runtime build becomes part of `embedding_version`, and the embedding stage and the query path resolve the version the same way. A runtime change means a new version and a full re-embed, never mixed vectors.
 - **Query API.** A FastAPI service in `query_service/` replaces the CLI as the query entry point.
-- **Operations.** Monitoring, alerting, a secrets manager, and database backups complete the operations layer.
+- **Operations.** Monitoring, alerting across all stages, a secrets manager, and database backups complete the operations layer. Telegram alerts already cover ingestion ([13](13-ingestion-operations.md)).
 
 Sources: hourly cycle, Modal, and version identity from
 [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md)

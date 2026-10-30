@@ -6,8 +6,11 @@ Every blank in these docs has exactly one row below. Each row points to the plac
 answer goes. Run commands from the project root unless the row names a host. Rows
 marked **(new)** are questions raised by the team's 2026-10-20 Modal investigation
 ([archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md)).
+Rows marked **(Oct 30)** come from the team's changes of 2026-10-25 to 2026-10-29
+(documents 12–14). A **Hint** in the Answer column is evidence found in the code, not a
+confirmed answer: the row stays open until someone confirms it.
 
-**Total: 40 blanks.**
+**Total: 46 blanks open, 1 answered.**
 
 ## Hardware
 
@@ -36,21 +39,22 @@ marked **(new)** are questions raised by the team's 2026-10-20 Modal investigati
 | ID | Question for the team | File and section | Command to get the answer (if any) | Answer | Status |
 |---|---|---|---|---|---|
 | V01 | Which Hadoop version does the cluster run? | [01 §8](01-system-overview.md#8-technology-stack) | `hdfs version` (on spark-master) | | |
-| V02 | Which PostgreSQL server version does the live database run? | [01 §8](01-system-overview.md#8-technology-stack) | `psql -d warcdb -c "SELECT version();"` | | |
+| V02 | Which PostgreSQL server version does the live database run? | [01 §8](01-system-overview.md#8-technology-stack) | `psql -d warcdb -c "SELECT version();"` | Hint: the Airflow units reference `postgresql@18-main.service`, which suggests 18 | |
 | V03 | Which pgvector extension version is installed? | [01 §8](01-system-overview.md#8-technology-stack) | `psql -d warcdb -c "SELECT extversion FROM pg_extension WHERE extname = 'vector';"` | | |
 | V04 | Which VMware product and version runs on the Debian host? | [02 §2](02-hardware-and-infrastructure.md#2-node-roles) | `vmware --version` (on the Debian host) | | |
-| V05 | Which Java version runs on the master and the workers? | [02 §2](02-hardware-and-infrastructure.md#2-node-roles) | `java -version` (on each node) | | |
+| V05 | Which Java version runs on the master and the workers? | [02 §2](02-hardware-and-infrastructure.md#2-node-roles) | `java -version` (on each node) | Hint: master runs Java 21.0.12 (`ingest_resume.log`); workers unknown | |
 | V06 | Which Python version and interpreter path does each worker have? They must match the master's packed venv (Python 3.13.5 locally). | [02 §2](02-hardware-and-infrastructure.md#2-node-roles) | `python3 --version` and `which python3` (on each worker); compare with `.venv/bin/python --version` and `readlink -f .venv/bin/python` on the master | | |
 
 ## Database host
 
 | ID | Question for the team | File and section | Command to get the answer (if any) | Answer | Status |
 |---|---|---|---|---|---|
-| D01 | Which host runs PostgreSQL? | [03 §2](03-cluster-design.md#2-node-roles-and-services) | `psql -d warcdb -c "SELECT inet_server_addr(), inet_server_port();"` (from spark-master; empty means a local socket on the same host) | | |
+| D01 | Which host runs PostgreSQL? | [03 §2](03-cluster-design.md#2-node-roles-and-services) | `psql -d warcdb -c "SELECT inet_server_addr(), inet_server_port();"` (from spark-master; empty means a local socket on the same host) | Hint: probably spark-master; the Airflow smoke test checks `localhost:5432` | |
 | D02 | How many vCPUs does the PostgreSQL host have? | [02 §3.1](02-hardware-and-infrastructure.md#31-known-and-unknown-specifications) | `nproc` (on the PostgreSQL host) | | |
 | D03 | How much RAM does the PostgreSQL host have? | [02 §3.1](02-hardware-and-infrastructure.md#31-known-and-unknown-specifications) | `free -h` (on the PostgreSQL host) | | |
 | D04 | What size and type (SSD or HDD) is the PostgreSQL data disk? | [02 §3.1](02-hardware-and-infrastructure.md#31-known-and-unknown-specifications) | `psql -d warcdb -c "SHOW data_directory;"`, then `df -h <that directory>` and `lsblk -d -o NAME,ROTA,SIZE` (ROTA 0 = SSD) | | |
 | D05 | Is the database backed up today, and how? | [03 §7](03-cluster-design.md#7-storage-design) | `crontab -l` and `sudo crontab -l` (on the PostgreSQL host), then ask the team | | |
+| D06 | **(Oct 30)** Does the live `warcdb` have the new `pages` and `metadata` columns, and how were they added? | [14 §7](14-article-metadata-and-deduplication.md#7-known-issues) | `psql -d warcdb -c "\d pages"` and `psql -d warcdb -c "\d metadata"` | | |
 
 ## Models
 
@@ -65,19 +69,25 @@ marked **(new)** are questions raised by the team's 2026-10-20 Modal investigati
 | ID | Question for the team | File and section | Command to get the answer (if any) | Answer | Status |
 |---|---|---|---|---|---|
 | P01 | **(new)** Is moving embeddings to Modal (AVX2-only ONNX Runtime wheel) decided, or still a proposal? | [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance) | None: ask the team | | |
-| P02 | Which scheduler will run the hourly cycle (for example cron, systemd timer, Airflow)? | [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | None: ask the team | | |
+| P02 | Which scheduler will run the hourly cycle (for example cron, systemd timer, Airflow)? | [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | None: ask the team | Airflow 3.3.2 (Recorded: [archive/airflow-migration.md](archive/airflow-migration.md)). Cadence is P09 | ✅ |
 | P03 | What are the production targets: number of articles (*A*) and queries per hour? | [02 §6](02-hardware-and-infrastructure.md#6-estimation-method) | None: ask the team | | |
 | P04 | What size should the production master be? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: decide after P03 | | |
 | P05 | How many production workers, and what size? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: decide after P01 and P03 | | |
 | P06 | What size should the production PostgreSQL host be? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: derive from [02 §6.2](02-hardware-and-infrastructure.md#62-storage) after P03 | | |
 | P07 | What size should the production query node be? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: decide after P03 (query rate) | | |
-| P08 | Where will the scheduler, FastAPI service, monitoring, and backups run? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: ask the team | | |
+| P08 | Where will the scheduler, FastAPI service, monitoring, and backups run? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: ask the team | Hint: Airflow runs on spark-master today; the other three are unknown | |
+| P09 | **(Oct 30)** What schedule will the `news_pipeline` DAG use: the hourly cycle, or manual trigger? | [12 §4](12-airflow-and-python-migration.md#4-target-pipeline) | None: ask the team | | |
+| P10 | **(Oct 30)** Which job will set `duplicate_of`, and must chunking, tagging, and embedding skip duplicates? | [14 §6](14-article-metadata-and-deduplication.md#6-deduplication-status) | None: ask the team | | |
+| P11 | **(Oct 30)** Will the ops watchdog be retired or rewritten when the supervisor is removed? | [13 §8](13-ingestion-operations.md#8-what-happens-at-cutover) | None: ask the team | | |
 
 ## Project decisions
 
 | ID | Question for the team | File and section | Command to get the answer (if any) | Answer | Status |
 |---|---|---|---|---|---|
 | J01 | Where is VM, Hadoop, and PostgreSQL provisioning kept (including `cluster_up.sh` and `cluster_down.sh`, which the README mentions but the repository does not contain)? | [01 §2](01-system-overview.md#2-scope) | `ls ~/cluster_up.sh ~/cluster_down.sh` (on the Debian host), then ask the team | | |
+| J02 | **(Oct 30)** Where are `shell-to-python-migration.md` and `.opencode/plan/probe_launcher.py` kept? The step guide needs them, and neither is tracked in git. | [12 §8](12-airflow-and-python-migration.md#8-known-issues) | `ls .opencode/plan/` and `find . -name 'shell-to-python-migration.md'` (on spark-master), then ask the team | | |
+| J03 | **(Oct 30)** Are the supervisor and watchdog running on spark-master, and with which `--interval`? | [13 §1](13-ingestion-operations.md#1-what-changed) | `python3 scripts/supervise_ingest.py status`, then `ps -ef \| grep ops_watchdog` (on spark-master) | | |
+| J04 | **(Oct 30)** Does the live `.env` define `POSTGRES_HOST`, `POSTGRES_USER`, `POSTGRES_DB`, and `POSTGRES_PASSWORD`? | [13 §7.2](13-ingestion-operations.md#72-supervisor-behavior) | `grep -c '^POSTGRES_' .env` (expected: 4) | | |
 
 ## How to fill a blank
 
@@ -94,5 +104,5 @@ marked **(new)** are questions raised by the team's 2026-10-20 Modal investigati
    docs. From this folder:
 
    ```bash
-   grep -o "\[\[FILL:" README.md 0*.md | wc -l
+   grep -o "\[\[FILL:" README.md [01]*.md | wc -l
    ```
