@@ -1,0 +1,92 @@
+erDiagram
+    websites ||--o{ pages : "website_id"
+    authors |o--o{ pages : "author_id"
+    pages ||--o| metadata : "page_id"
+    pages ||--o| content : "page_id"
+    pages |o--o{ pages : "duplicate_of"
+    pages ||--o{ chunk_materializations : "page_id"
+    pages ||--o{ article_chunks : "page_id"
+    article_chunks ||--o{ chunk_analyses : "page, version, index"
+    article_chunks ||--o{ chunk_embeddings : "page, version, index"
+    ingest_runs ||--o{ ingest_run_files : "run_id"
+    ingest_runs ||--o{ ingest_chunks : "run_id"
+
+    websites {
+        serial id PK
+        text domain UK
+    }
+    authors {
+        serial id PK
+        text name UK
+    }
+    pages {
+        serial id PK
+        int website_id FK
+        int author_id FK
+        text warc_record_id UK
+        text url
+        text canonical_key
+        text text_hash
+        int duplicate_of FK
+    }
+    metadata {
+        int page_id PK
+        text title
+        text language
+        timestamptz published_at
+        jsonb html_meta
+    }
+    content {
+        int page_id PK
+        text cleaned_text
+    }
+    chunk_materializations {
+        int page_id PK
+        text chunking_version PK
+        text source_hash
+        int chunk_count
+    }
+    article_chunks {
+        int page_id PK
+        text chunking_version PK
+        int chunk_index PK
+        text chunk_text
+        text text_hash
+        boolean eligible
+        text filter_reason
+    }
+    chunk_analyses {
+        int page_id PK
+        text chunking_version PK
+        int chunk_index PK
+        text backend PK
+        text model PK
+        text analysis_version PK
+        text status
+        jsonb tags
+    }
+    chunk_embeddings {
+        int page_id PK
+        text chunking_version PK
+        int chunk_index PK
+        text embedding_model PK
+        text embedding_version PK
+        vector embedding
+    }
+    ingest_runs {
+        uuid run_id PK
+        text manifest_id
+        bigint inserted_count
+        text status
+    }
+    ingest_run_files {
+        uuid run_id PK
+        text file_url PK
+        bigint next_offset
+        text status
+    }
+    ingest_chunks {
+        text chunk_id PK
+        uuid run_id FK
+        jsonb stats
+    }

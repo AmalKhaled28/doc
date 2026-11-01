@@ -4,9 +4,15 @@ Baseline technical documentation for the **sparc_warc** project: a multilingual
 (Arabic, English, French) news retrieval-augmented generation (RAG) system built on
 Common Crawl CC-NEWS archives, Apache Spark on YARN, and PostgreSQL with pgvector.
 
-This documentation set is the team's reference baseline. Every statement is traceable
-to a file in this repository or is explicitly labelled as inferred, proposed, or
-awaiting confirmation (see the [confidence legend](#3-confidence-legend)).
+This is the official documentation of the project and the team's reference baseline.
+Every statement is traceable to a file in this repository or is explicitly labelled as
+inferred, proposed, or awaiting confirmation (see the
+[confidence legend](#3-confidence-legend)).
+
+**Code baseline:** `master` at `d794b8c`. Where the `airflow_migration` branch differs, at
+`2769828`, the page says so. The branch is not merged. Commands that the branch deleted
+stay in this baseline until it is merged; [08 §2](08-deployment-and-running.md#2-commands-on-each-ref)
+lists both.
 
 ---
 
@@ -38,7 +44,7 @@ All stages run as bounded, resumable batch commands today. See
 | Keep worker memory bounded | Count and byte budgets on every Spark task and result ([jobs/batching.py](../jobs/batching.py)) | Verified in code |
 | Allow reprocessing without data loss | Every derived table is keyed by a version (`chunking_version`, `analysis_version`, `embedding_version`) | Verified in code |
 | Answer questions only from evidence | Citation validation against retrieved chunk IDs ([retrieval/agent.py](../retrieval/agent.py)) | Verified in code |
-| Run continuously in production | Started, not finished. Airflow services run on the master, but no DAG runs the pipeline yet ([12](12-airflow-and-python-migration.md)). Proposed design: an hourly cycle, with embeddings on Modal; see [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance) and [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | Proposed (not implemented) |
+| Run continuously in production | Started, not finished. Airflow services run on the master, but on `master` no DAG runs the pipeline yet. A `@daily` DAG exists on the `airflow_migration` branch ([12 §4.1](12-airflow-and-python-migration.md#41-what-exists-on-the-branch)). Proposed design: an hourly cycle, with embeddings on Modal; see [01 §9](01-system-overview.md#9-prototype-and-production-at-a-glance) and [03 §11](03-cluster-design.md#11-prototype-vs-production-cluster) | Proposed (not implemented) |
 
 ## 3. Confidence legend
 
@@ -56,8 +62,8 @@ Statements, table cells, and diagram notes carry one of these labels where relev
 ## 4. Quick start (prototype)
 
 This is a condensed path for an engineer who already has a working Spark/YARN cluster
-and a PostgreSQL database with pgvector. A full procedure from bare hardware is planned
-for document 08 (not written yet).
+and a PostgreSQL database with pgvector. The full procedure, with a check after each
+step, is in [08 — Deployment and running](08-deployment-and-running.md).
 
 **Prerequisites**
 
@@ -128,25 +134,35 @@ meet the target (shortfall). *(Verified in code)*
 
 | Document | Contents | Status |
 |---|---|---|
-| [01-system-overview.md](01-system-overview.md) | Purpose, scope, context and component diagrams, component map, tech stack | Batch 1 |
-| [02-hardware-and-infrastructure.md](02-hardware-and-infrastructure.md) | Hardware evidence, sizing per node role, network and storage needs, estimation method | Batch 1 |
-| [03-cluster-design.md](03-cluster-design.md) | Node roles, workload placement, ports, artifact distribution, scaling, failure handling | Batch 1 |
+| [01-system-overview.md](01-system-overview.md) | Purpose, scope, context and component diagrams, component map, tech stack | Current |
+| [02-hardware-and-infrastructure.md](02-hardware-and-infrastructure.md) | Hardware evidence, sizing per node role, network and storage needs, estimation method | Current; has open blanks |
+| [03-cluster-design.md](03-cluster-design.md) | Node roles, workload placement, ports, artifact distribution, scaling, failure handling | Current; has open blanks |
+| [04-modules/](04-modules/README.md) | One page per module: ingestion, chunking, tagging, embeddings, retrieval, db, jobs, scripts, query_service, tests | Current |
+| [05-data-flow.md](05-data-flow.md) | End-to-end flow with payload formats and schemas | Current |
+| [06-database.md](06-database.md) | Tables, keys, indexes, ER diagram, retention, read/write ownership | Current |
+| [07-configuration.md](07-configuration.md) | Every environment variable, flag, config file, and secret | Current |
+| [08-deployment-and-running.md](08-deployment-and-running.md) | From prepared machines to a running system, step by step | Current; steps not executed for this page |
+| [09-operations.md](09-operations.md) | Monitoring, logs, troubleshooting, reprocessing, backup and recovery | Current |
+| [10-prototype-vs-production.md](10-prototype-vs-production.md) | Per-module comparison and migration path | Current |
+| [11-roadmap-and-open-questions.md](11-roadmap-and-open-questions.md) | Known issues, limitations, roadmap | Current |
+| [12-airflow-and-python-migration.md](12-airflow-and-python-migration.md) | Airflow deployment, the planned DAGs, launcher progress, phases, command changes | Current at `2769828` |
+| [13-ingestion-operations.md](13-ingestion-operations.md) | Failed-file recycling, ingest supervisor, ops watchdog, Telegram, real run scale | Current at `2769828` |
+| [14-article-metadata-and-deduplication.md](14-article-metadata-and-deduplication.md) | New extraction fields, database columns, canonical URLs, deduplication status | Current |
 | [FILL-IN.md](FILL-IN.md) | Every open question for the team, with the place it belongs and how to answer it | Living list |
-| 04-modules/ | One file per module: ingestion, chunking, tagging, embeddings, retrieval, db, jobs, scripts, query_service | Planned (not written yet) |
-| 05-data-flow.md | End-to-end flow with payload formats and schemas | Planned (not written yet) |
-| 06-database.md | Tables, keys, indexes, ER diagram, retention, read/write ownership | Planned (not written yet) |
-| 07-configuration.md | Every environment variable, flag, config file, and secret | Planned (not written yet) |
-| 08-deployment-and-running.md | Bare hardware to a running system, step by step | Planned (not written yet) |
-| 09-operations.md | Monitoring, logs, troubleshooting, backup and recovery | Planned (not written yet) |
-| 10-prototype-vs-production.md | Per-module comparison and migration path | Planned (not written yet) |
-| 11-roadmap-and-open-questions.md | Known issues and limitations | Planned (not written yet) |
-| [12-airflow-and-python-migration.md](12-airflow-and-python-migration.md) | Airflow deployment, the planned DAGs, launcher progress, phases, command changes | Added 2026-10-30 |
-| [13-ingestion-operations.md](13-ingestion-operations.md) | Failed-file recycling, ingest supervisor, ops watchdog, Telegram, real run scale | Added 2026-10-30 |
-| [14-article-metadata-and-deduplication.md](14-article-metadata-and-deduplication.md) | New extraction fields, database columns, canonical URLs, deduplication status | Added 2026-10-30 |
 
-Documents 12–14 cover the team's changes of 2026-10-25 to 2026-10-29, read from
-`origin/master` (`d794b8c`) and `origin/airflow_migration` (`e668b69`). Their content can
-move into documents 06, 09, and 10 when those are written.
+Documents 12 and 13 read `origin/master` (`d794b8c`) and `origin/airflow_migration`
+(`2769828`). Document 14 reads `origin/master` (`d794b8c`).
+
+### Where to start
+
+| You want to | Read |
+|---|---|
+| Understand the system | [01](01-system-overview.md), then [05](05-data-flow.md) |
+| Set it up and run it | [08](08-deployment-and-running.md), with [07](07-configuration.md) |
+| Keep it running | [09](09-operations.md), [13](13-ingestion-operations.md) |
+| Change a module | [04-modules/](04-modules/README.md), [06](06-database.md) |
+| Plan the cluster | [02](02-hardware-and-infrastructure.md), [03](03-cluster-design.md) |
+| See what is left | [10](10-prototype-vs-production.md), [11](11-roadmap-and-open-questions.md), [FILL-IN.md](FILL-IN.md) |
 
 ### Diagrams
 
@@ -180,9 +196,9 @@ Do not put Mermaid code blocks in the `.md` files.
 ### Detailed legacy references
 
 The documents below predate this baseline and were moved, unchanged in content, to
-[archive/](archive/). They hold useful detail, but some statements are outdated. A
-Known Issues list is planned for document 11 (not written yet). Where this baseline and
-an archived document disagree, this baseline wins.
+[archive/](archive/). They hold useful detail, but some statements are outdated. Known
+issues are listed in [11](11-roadmap-and-open-questions.md). Where this baseline and an
+archived document disagree, this baseline wins.
 
 | Legacy document | Topic |
 |---|---|
@@ -195,7 +211,7 @@ an archived document disagree, this baseline wins.
 | [archive/retrieval-chatbot-design.md](archive/retrieval-chatbot-design.md) | Retrieval and chatbot design decisions |
 | [archive/embedding-runtime-consistency.md](archive/embedding-runtime-consistency.md) | Embedding drift across CPU instruction sets, the proposed move of embeddings to Modal with an AVX2-only ONNX Runtime wheel, and the hourly-cycle plan (2026-10-20; copied unchanged from the team's `docs/`) |
 | [archive/airflow-migration.md](archive/airflow-migration.md) | Plan for moving from shell scripts to Python and Airflow (2026-10-26; copied unchanged from the team's `docs/`) |
-| [archive/shell-to-python-step-by-step.md](archive/shell-to-python-step-by-step.md) | Step-by-step build guide for the same migration (2026-10-29; copied unchanged from the `airflow_migration` branch) |
+| [archive/shell-to-python-step-by-step.md](archive/shell-to-python-step-by-step.md) | Step-by-step build guide for the same migration (2026-10-29). Historical record only: the branch deleted it in `d761827` |
 
 ## 6. Glossary
 

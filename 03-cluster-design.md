@@ -1,6 +1,6 @@
 # 03 — Cluster Design
 
-[Docs home](README.md) · Previous: [02 — Hardware and infrastructure](02-hardware-and-infrastructure.md) · Next: 04 — Modules (not written yet)
+[Docs home](README.md) · Previous: [02 — Hardware and infrastructure](02-hardware-and-infrastructure.md) · Next: [04 — Modules](04-modules/README.md)
 
 ---
 
@@ -162,8 +162,8 @@ one CPU instruction set, or the same model gives different vectors under one
 
 | Lock | Key | Scope | Held by | Source |
 |---|---|---|---|---|
-| Schema migration | `pg_advisory_xact_lock(782936402)` | One transaction | `init_db()` at the start of every stage | [db/db_handler.py](../db/db_handler.py#L158) |
-| Ingestion coordinator | first 8 bytes of `sha256("spark-warc-ingestion-coordinator")` | Session; **global** across all manifests, although the error message names the manifest | Ingestion driver | [db/db_handler.py](../db/db_handler.py#L192-L203) |
+| Schema migration | `pg_advisory_xact_lock(782936402)` | One transaction | `init_db()` at the start of every stage | [db/db_handler.py](../db/db_handler.py#L171) |
+| Ingestion coordinator | first 8 bytes of `sha256("spark-warc-ingestion-coordinator")` | Session; **global** across all manifests, although the error message names the manifest | Ingestion driver | [db/db_handler.py](../db/db_handler.py#L205-L214) |
 | Chunking / tagging / embedding coordinator | first 8 bytes of `sha256("spark-warc-<stage>")` | Session, per stage | Each processing driver | [db/chunks.py](../db/chunks.py#L13-L25) |
 
 The locks allow one ingestion driver and one driver per processing stage. **Different
@@ -234,4 +234,4 @@ Sources: hourly cycle, Modal, and version identity from
 §1, §6, and §7; query API from [archive/rag-api-plan.md](archive/rag-api-plan.md).
 Production sizes are blanks in
 [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing). A
-per-module migration path is planned for document 10 (not written yet).
+per-module migration path is in [10](10-prototype-vs-production.md).

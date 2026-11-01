@@ -76,7 +76,7 @@ confirmed answer: the row stays open until someone confirms it.
 | P06 | What size should the production PostgreSQL host be? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: derive from [02 §6.2](02-hardware-and-infrastructure.md#62-storage) after P03 | | |
 | P07 | What size should the production query node be? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: decide after P03 (query rate) | | |
 | P08 | Where will the scheduler, FastAPI service, monitoring, and backups run? | [02 §6.5](02-hardware-and-infrastructure.md#65-prototype-vs-production-sizing) | None: ask the team | Hint: Airflow runs on spark-master today; the other three are unknown | |
-| P09 | **(Oct 30)** What schedule will the `news_pipeline` DAG use: the hourly cycle, or manual trigger? | [12 §4](12-airflow-and-python-migration.md#4-target-pipeline) | None: ask the team | | |
+| P09 | **(Oct 30)** What schedule will the `news_pipeline` DAG use: the hourly cycle, or manual trigger? | [12 §4](12-airflow-and-python-migration.md#4-target-pipeline) | None: ask the team | Hint: `ingestion_pipeline` on `airflow_migration` (`2769828`) uses `@daily` in EET. Not a final decision: the DAG is not on `master`, and nobody has confirmed that it runs | |
 | P10 | **(Oct 30)** Which job will set `duplicate_of`, and must chunking, tagging, and embedding skip duplicates? | [14 §6](14-article-metadata-and-deduplication.md#6-deduplication-status) | None: ask the team | | |
 | P11 | **(Oct 30)** Will the ops watchdog be retired or rewritten when the supervisor is removed? | [13 §8](13-ingestion-operations.md#8-what-happens-at-cutover) | None: ask the team | | |
 

@@ -262,7 +262,7 @@ The token estimate is the UTF-8 byte length of the prompt plus 600.
 Example: 2,000 articles is about 10,145 requests, or about 85 minutes at the default
 pacing with 3 tasks, before retries *(Inferred)*. The 429 errors in the snapshot show
 that the account's per-minute token limit is reached sooner than the default pacing
-assumes (see Known Issues).
+assumes (K38 in [11](11-roadmap-and-open-questions.md)).
 
 ### 6.5 Prototype vs production sizing
 

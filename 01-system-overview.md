@@ -27,7 +27,7 @@ with citations to the stored chunks.
 
 | Out of scope today | Status |
 |---|---|
-| Scheduled operation of any stage | Airflow services exist, but no DAG runs a stage ([12](12-airflow-and-python-migration.md)). Pipeline DAGs: Proposed (not implemented) |
+| Scheduled operation of any stage | On `master`, Airflow services exist, but no DAG runs a stage. A `@daily` DAG exists on the `airflow_migration` branch only, and whether it runs is unknown ([12 §4.1](12-airflow-and-python-migration.md#41-what-exists-on-the-branch)) |
 | Article deduplication | Columns exist, but nothing detects or skips duplicates ([14 §6](14-article-metadata-and-deduplication.md#6-deduplication-status)) |
 | HTTP query API (`query_service/` is an empty package) | Proposed (not implemented) |
 | Monitoring, secrets management, backups, and alerting beyond ingestion | Proposed (not implemented) |
@@ -98,8 +98,9 @@ empty `query_service/` package is reserved for the proposed API. *(Verified in c
 | Query service | [query_service/](../query_service/) | Empty placeholder | — | — | — | — | — |
 | Tests | [tests/](../tests/) | Unit, integration (`WARC_TEST_DSN`), and Spark smoke tests | Local | `.venv` + optional deps | `python -m unittest` | disposable DB | disposable schemas |
 
-A detailed page per module is planned for 04-modules (not written yet). Until then,
-[archive/module_map.md](archive/module_map.md) lists function signatures and payloads.
+Each module has a detailed page in [04-modules/](04-modules/README.md).
+[archive/module_map.md](archive/module_map.md) also lists older function signatures and
+payloads.
 
 ## 6. Design principles
 

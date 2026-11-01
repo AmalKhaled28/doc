@@ -5,7 +5,7 @@
 ---
 
 > **Code baseline.** This document reads `origin/master` at `d794b8c` and
-> `origin/airflow_migration` at `e668b69` (2026-10-29). Files that exist only on the
+> `origin/airflow_migration` at `2769828` (2026-11-01). Files that exist only on the
 > branch are written as plain code text, not as links.
 
 ## 1. What changed
@@ -105,6 +105,7 @@ it too. `status` shows the supervisor, the drivers, the YARN application, and pr
 |---|---|---|
 | Tracks | One fixed run ID (`bf82b942-…`) | One manifest (`2026/09`) |
 | Relaunch | Resumes that run with `--resume-run-id` | Starts a **new** run each time |
+| Launcher | Shell launcher | `.venv/bin/python -m jobs.launcher ingest` |
 
 A new run loses no work: `create_run` copies progress from `ingest_files`. The side effect
 on completion detection is in [§7](#7-known-issues).
@@ -119,7 +120,8 @@ Commands: `scripts/ops_watchdog.py start [--interval 600] | stop | status`.
 
 | Trigger | Threshold | Action |
 |---|---|---|
-| Supervisor down | Pidfile dead | Restart it; alert at most hourly |
+| Supervisor down, files left | Pidfile dead | Restart it; alert at most hourly |
+| Supervisor down, run complete | Pidfile dead and all files `eof` | Do not restart it; send a "run complete" message at most hourly, and end that check |
 | No commit progress | 30 minutes with a driver running | Alert and wake the agent |
 | Low disk, master | Under 1 GB on `/` or `/home` | Alert and wake the agent |
 | Low disk, worker | Under 1 GB on `/home` | Ask for approval to clean up |
@@ -127,6 +129,11 @@ Commands: `scripts/ops_watchdog.py start [--interval 600] | stop | status`.
 | Periodic report | Every 4 hours | Status and estimated finish time |
 
 Each alert type repeats at most once per hour.
+
+The "run complete" rule uses the same count as the supervisor: rows across all runs of the
+manifest. The completion issue in [§7.2](#72-supervisor-behavior) therefore applies to it
+too: if rows from older runs never reach `eof`, this rule does not fire, and the watchdog
+restarts a stopped supervisor as before.
 
 ### 5.2 Telegram commands
 
@@ -176,7 +183,7 @@ New Spark settings are listed in [03 §3.3](03-cluster-design.md#33-spark-settin
 ## 7. Known issues
 
 These are recorded only, not fixed. Evidence is from reading the code; nothing here was
-executed. They move to the Known Issues table when document 11 is written.
+executed. They are also listed in [11](11-roadmap-and-open-questions.md).
 
 ### 7.1 Watchdog behavior
 
@@ -212,13 +219,13 @@ executed. They move to the Known Issues table when document 11 is written.
 ## 8. What happens at cutover
 
 The migration plan retires `scripts/supervise_ingest.py` in its Phase 6, after
-`news_pipeline` has proved itself on real runs. It does not mention the watchdog, and
-the step guide does not either. *(Verified: no mention of "watchdog" in either document.)*
+`news_pipeline` has proved itself on real runs. It does not mention the watchdog.
+*(Verified: no mention of "watchdog" in `docs/airflow-migration.md` at `2769828`.)*
 
 This matters because the watchdog restarts the supervisor whenever it finds it down.
 Until someone updates it, deleting the supervisor would leave the watchdog trying to
 restart a missing file. Decision needed: [[FILL: will ops_watchdog be retired or rewritten when the supervisor is removed]].
 
-The stage cutover also touches this area: Step 1.16 of the guide updates the supervisor's
-launch command, and the watchdog's alerting would still be useful under Airflow only if
-its checks are rewritten around DAG runs *(Inferred)*.
+The stage cutover has already touched this area: on the branch, the supervisor's launch
+command uses `jobs.launcher` *(Verified in code)*. The watchdog's alerting would still be
+useful under Airflow only if its checks are rewritten around DAG runs *(Inferred)*.

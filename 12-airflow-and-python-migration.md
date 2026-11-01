@@ -5,25 +5,35 @@
 ---
 
 > **Code baseline.** This document reads two remote refs of the team repository:
-> `origin/master` at `d794b8c` and `origin/airflow_migration` at `e668b69`
-> (2026-10-29). Files that exist only on the branch are written as plain code text, not
-> as links. The migration is in progress, so check both refs before relying on a detail.
+> `origin/master` at `d794b8c` and `origin/airflow_migration` at `2769828`
+> (2026-11-01). Files that exist only on the branch are written as plain code text, not
+> as links. The branch is not merged into `master`, so check both refs before relying on
+> a detail.
 
 ## 1. Status at a glance
 
 The team is replacing the Bash launchers with Python and moving orchestration to Apache
-Airflow. The pipeline stages themselves do not change. Today the migration has reached
-Step 1.2 of Phase 1, and no stage runs through Airflow or through the new launcher.
+Airflow. The pipeline stages themselves do not change. On the `airflow_migration` branch,
+Phases 1 and 2 are complete and a pipeline DAG exists. None of this is on `master` yet,
+and whether the DAG runs on the cluster is unknown.
+
+**On `airflow_migration` at `2769828`**
 
 | Item | State | Where | Confidence |
 |---|---|---|---|
 | Airflow services (API server, DAG processor, scheduler) | Installed and running on the master | [airflow/systemd/](../airflow/systemd/), [archive/airflow-migration.md](archive/airflow-migration.md) | Unit files: Verified in code. Running: Recorded |
-| Smoke-test DAG | Exists, manual trigger only | [airflow/dags/airflow_smoke_test.py](../airflow/dags/airflow_smoke_test.py) | Verified in code |
-| Ingestion DAG file | Broken: the file stops after `@task` | [airflow/dags/ingestion.py](../airflow/dags/ingestion.py) | Verified in code |
-| `news_pipeline` and `news_export` DAGs | Not written | [§4](#4-target-pipeline) | Proposed (not implemented) |
-| Python launcher | Bootstrap only: it cannot submit a job yet | `jobs/launcher.py` (branch only) | Verified in code |
-| Shell launchers | Still the only way to run a stage | [scripts/run_processing.sh](../scripts/run_processing.sh) | Verified in code |
+| Smoke-test DAG | Exists, manual trigger only. Its dry run now calls `jobs.launcher` | [airflow/dags/airflow_smoke_test.py](../airflow/dags/airflow_smoke_test.py) | Verified in code |
+| Ingestion DAG file | Complete on the branch: the `ingestion_pipeline` DAG ([§4.1](#41-what-exists-on-the-branch)). Still broken on `master`: the file stops after `@task` | [airflow/dags/ingestion.py](../airflow/dags/ingestion.py) | Verified in code |
+| `news_pipeline` and `news_export` DAGs | Not written. `ingestion_pipeline` has a different name and shape from the planned `news_pipeline` | [§4](#4-target-pipeline) | Proposed (not implemented) |
+| Python launcher | Working, with a `launch()` Python API ([§5.1](#51-launcher-progress)). One real smoke ingest is recorded; chunk, tag, and embed have recorded dry runs only | `jobs/launcher.py`, `jobs/artifacts.py`, `jobs/spark.py`, `jobs/errors.py` (branch only) | Code: Verified in code. Runs: Recorded in `docs/validation.md` (branch) |
+| Shell launchers and utilities | Deleted: the stage launchers, `export_csv`, `inspect_db`, and `watch_embeddings`. Replacements are in [§5.4](#54-command-changes-after-cutover). The setup and model download scripts are still Bash (Phase 3) | Branch tree | Verified in code |
 | Airflow metadata on PostgreSQL | Not done: metadata is on SQLite | [archive/airflow-migration.md](archive/airflow-migration.md) Phase 4 | Recorded |
+
+**On `master` at `d794b8c`**
+
+| Item | State | Where | Confidence |
+|---|---|---|---|
+| Shell launchers | Still the only way to run a stage | [scripts/run_processing.sh](../scripts/run_processing.sh) | Verified in code |
 
 ## 2. Decisions the team has recorded
 
@@ -90,6 +100,9 @@ It runs four tasks: a start task, an `environment` task (tools, `.venv`, the emb
 model, HDFS, PostgreSQL, a running YARN node), a dry run of
 `scripts/run_ingestion.sh`, and a finish task. *(Verified in code)*
 
+On the branch, the dry-run task calls `.venv/bin/python -m jobs.launcher ingest` instead.
+*(Verified in code)*
+
 ## 4. Target pipeline
 
 **Level 2: the planned `news_pipeline` DAG**
@@ -98,6 +111,7 @@ model, HDFS, PostgreSQL, a running YARN node), a dry run of
 
 *Source: [diagrams/src/12-news-pipeline.mmd](diagrams/src/12-news-pipeline.mmd)*
 
+This is the team's plan, not the DAG on the branch ([§4.1](#41-what-exists-on-the-branch)).
 An operator starts a run from a form in the Airflow UI. The probe checks Common Crawl
 first, so retries during an outage do not load the cluster, and then each stage runs as
 its own task. Every grey node is **Proposed (not implemented)**.
@@ -111,34 +125,76 @@ its own task. Every grey node is **Proposed (not implemented)**.
 | `news_export` | Separate DAG, manual trigger only, runs `python -m scripts.export_csv` |
 | Logs | Progress bars stay off (`NO_PROGRESS=1`) because they are unreadable in the UI |
 
-The plan does not give a schedule for `news_pipeline`. Schedule:
+The plan does not give a schedule for `news_pipeline`. The branch DAG uses `@daily`
+(Hint for P09 in [FILL-IN.md](FILL-IN.md)). This is not a final decision, because the DAG
+is not on `master` and nobody has confirmed that it runs. Schedule:
 [[FILL: schedule of the news_pipeline DAG (hourly cycle or manual trigger)]].
+
+### 4.1 What exists on the branch
+
+`airflow/dags/ingestion.py` now defines the `ingestion_pipeline` DAG. Its file name is
+unchanged, although the plan says to delete that file and create `news_pipeline`.
+*(Every row is Verified in code at `2769828`.)*
+
+| Setting | Value |
+|---|---|
+| Tasks | `download_and_enter_db → chunk → tag → embed`, each calling `launch()` through `@task.external_python` |
+| Python | `.venv` for ingest, chunk, and tag; the embedding venv for embed |
+| Schedule | `@daily`, `catchup=False`, start date 2025-11-01 |
+| Time zone | EET, in both the start date and the task `TZ` |
+| Months ingested | The month of `data_interval_start` and the month before it, one `launch()` call each. January also uses December of the previous year |
+| Run parameters | `num_files` (default `all`), `max_accepted_articles` (default `0`), `max_accepted_per_file` (default `0`). There are no `year` or `month` parameters |
+| Concurrency | `max_active_runs=1`, `max_active_tasks=1` |
+| Progress bars | Off (`no_progress=True`, `NO_PROGRESS=1`) |
+
+`NUM_FILES` also changed on the branch: its default in `ingestion/pipeline.py` is now
+`all`, not `15`.
+
+The months come from `data_interval_start`, not from the wall clock. Its value at a month
+boundary depends on Airflow's timetable settings, which the repository does not set.
+
+**Failure behavior.** The differences from the plan matter most here:
+
+- The DAG sets no `retries` or `retry_delay`, and it has no probe task for Common Crawl. A retry setting outside the repository could still apply, for example in `airflow.env` *(Inferred)*.
+- `launch()` raises `LaunchError` on any non-zero exit code. Exit code 2 therefore fails the task, and the planned "sources exhausted before quota" message does not exist.
+- The ingest task handles the two months in one loop, so an error in the first month stops the second.
 
 ## 5. Shell to Python
 
 ### 5.1 Launcher progress
 
-**Level 2: what `jobs/launcher.py` does so far**
+**Level 2: what `jobs/launcher.py` did at `e668b69`**
 
 ![Launcher progress](diagrams/12-launcher-progress.svg)
 
 *Source: [diagrams/src/12-launcher-progress.mmd](diagrams/src/12-launcher-progress.mmd)*
 
-Blue steps exist in the branch and grey steps do not. After choosing the venv, the
-launcher stops without running anything. *(Verified in code: `jobs/launcher.py`, branch
-only)*
+This diagram predates `2769828`. All of its steps now exist: at `2769828` the launcher
+reads `.env`, picks the stage venv, resolves the configuration, packages the code and
+environment (`jobs/artifacts.py`), publishes to HDFS, runs `spark-submit`
+(`jobs/spark.py`), and returns the exit code. `--help` and dry runs stop before packaging.
+*(Verified in code: `jobs/launcher.py`, branch only)*
 
 The launcher reads `VENV_DIR` for the main environment. For `embed` it reads
 `EMBEDDING_VENV_DIR`, then `EMBEDDING_ONNX_VENV_DIR`, then falls back to
-`.venv-embedding-onnx`. It records `SPARK_WARC_EXPORTED_ENV_KEYS` before it loads
-`.env`, and it uses `SPARK_WARC_LAUNCHER_STARTED` to mark the second start.
+`.venv-embedding-onnx`. It records `SPARK_WARC_EXPORTED_ENV_KEYS` before it adds the
+`.env` values. It no longer restarts itself: it runs each stage as a child process of the
+stage venv's Python. The launcher itself uses only the standard library. *(Verified in
+code)*
+
+**Command line.** `python -m jobs.launcher <stage>` returns these exit codes:
 
 | Input | Exit code |
 |---|---|
 | No stage given | 1 |
-| Unknown stage | 2 |
+| Unknown stage | 2 (see [§8](#8-known-issues)) |
 | Main or embedding venv missing | 1 |
-| Valid stage | 0, with no work done (see [§8](#8-known-issues)) |
+| Valid stage | The exit code of the stage or `spark-submit`. A process killed by a signal gives 128 plus the signal number |
+
+**Python API.** `launch(stage, **options)` starts a stage from Python, and the DAG uses
+it. Option names are the stage's CLI flags, with underscores. It returns 0 on success
+and raises `LaunchError` on any non-zero exit code, so Airflow marks the task failed.
+*(Verified in code)*
 
 ### 5.2 Work order
 
@@ -150,42 +206,36 @@ The launcher reads `VENV_DIR` for the main environment. For `embed` it reads
 
 The launcher and the Airflow database must both land before the DAGs, and the supervisor
 is retired only after the DAGs have proved themselves on real runs. Utilities and setup
-scripts are independent, so they can fill waiting time. Blue is in progress; grey has not
-started.
+scripts are independent, so they can fill waiting time. The diagram predates `2769828`;
+the table gives the current status.
 
-| Phase | Size | Depends on |
-|---|---|---|
-| 1. Launcher port | About 2–3 days | None |
-| 2. Utilities | About ½ day | None |
-| 3. Setup scripts | About ½ day | None |
-| 4. Airflow metadata database | About 1 hour | None; do it before phase 5 |
-| 5. DAGs | About 1 day | 1 and 4 |
-| 6. Retire the supervisor | Tiny | 5, proven in production |
-| 7. Docs and tests | Ongoing | All |
+| Phase | Size | Depends on | Status at `2769828` |
+|---|---|---|---|
+| 1. Launcher port | About 2–3 days | None | Complete (2026-11-01) |
+| 2. Utilities | About ½ day | None | Complete (2026-11-01). One check is still open: a live byte-for-byte comparison with an earlier export |
+| 3. Setup scripts | About ½ day | None | Not done: the three scripts are still Bash |
+| 4. Airflow metadata database | About 1 hour | None; do it before phase 5 | Not done |
+| 5. DAGs | About 1 day | 1 and 4 | Started out of order: `ingestion_pipeline` exists while phase 4 is open, and the plan's checklist is still empty |
+| 6. Retire the supervisor | Tiny | 5, proven in production | Not done |
+| 7. Docs and tests | Ongoing | All | Ongoing |
 
-*(Recorded: [archive/airflow-migration.md](archive/airflow-migration.md))*
+*(Sizes and dependencies Recorded: [archive/airflow-migration.md](archive/airflow-migration.md).
+Status Recorded: `docs/airflow-migration.md` on the branch; phase 3 and the DAG file
+Verified in code)*
 
-### 5.3 Which team document covers what
+### 5.3 Team documents
 
-The two team documents number their phases differently.
-
-| Work | [Migration plan](archive/airflow-migration.md) | [Step guide](archive/shell-to-python-step-by-step.md) |
-|---|---|---|
-| Baseline capture | Not covered | Phase 0 |
-| Launcher | Phase 1 | Phase 1 (Steps 1.1–1.16) |
-| Utilities | Phase 2 | Phase 2 |
-| Setup and downloaders | Phase 3 | Phase 3 |
-| Airflow metadata database | Phase 4 | Not covered |
-| DAGs | Phase 5 | Not covered |
-| Retire the supervisor | Phase 6 | Not covered |
-| Docs and closeout | Phase 7 | Phase 4 |
+The migration plan, `docs/airflow-migration.md`, is the only team document for this work
+on the branch. The step-by-step build guide was deleted in `d761827` (2026-11-01). The
+copy in [archive/](archive/) is a historical record, not a current reference.
 
 ### 5.4 Command changes after cutover
 
-Use the left column until the cutover (Step 1.16). Nothing in the right column works yet
-for a real run.
+The branch has already made this cutover, so use the right column there. `master` still
+uses the left column. The last row has not happened yet: the supervisor stays until
+Phase 6.
 
-| Today | After cutover |
+| `master` | `airflow_migration` |
 |---|---|
 | `./scripts/run_ingestion.sh …` | `python -m jobs.launcher ingest …` |
 | `./scripts/run_chunking.sh …` | `python -m jobs.launcher chunk …` |
@@ -194,7 +244,7 @@ for a real run.
 | `./scripts/export_csv.sh` | `python -m scripts.export_csv` |
 | `./scripts/inspect_db.sh` | `python -m db.inspect` |
 | `./scripts/watch_embeddings.sh` | `python -m scripts.watch_embeddings` |
-| `scripts/supervise_ingest.py` | `news_pipeline` retries in Airflow |
+| `scripts/supervise_ingest.py` | Still `scripts/supervise_ingest.py`. Planned: `news_pipeline` retries in Airflow |
 
 ## 6. Risks the team has named
 
@@ -215,8 +265,10 @@ authentication hardening, Celery or Kubernetes executors, and high-availability 
 
 ## 8. Known issues
 
-These are recorded only, not fixed. Evidence is from reading the code; nothing here was
-executed. They move to the Known Issues table when document 11 is written.
+The first table records the issues as found at `e668b69`, and its references to the
+step guide are part of that record. The second table gives their status at `2769828`.
+Evidence is from reading the code; nothing here was executed. Open issues are also
+listed in [11](11-roadmap-and-open-questions.md).
 
 | Issue | Evidence | Effect | Confidence |
 |---|---|---|---|
@@ -225,3 +277,13 @@ executed. They move to the Known Issues table when document 11 is written.
 | Unknown stage prints a message | The launcher prints an error to stderr; Step 1.1 says "exit 2 with no output" | Differs from the guide's target | Verified in code |
 | Step guide references are missing | `shell-to-python-migration.md` and `.opencode/plan/probe_launcher.py` are not tracked on either ref. Steps 0.1 and 1.2 depend on them. The "empty `scripts/run_processing.py`" in the guide is not tracked either. Location: [[FILL: where shell-to-python-migration.md and probe_launcher.py are kept]] | Nobody without those files can follow Phase 0 | Verified in code (absence) |
 | Venv re-execution can be skipped | The launcher compares `os.path.realpath` of the venv Python with `sys.executable`. A venv Python is often a symlink to the base interpreter | Started from that base interpreter, the launcher can stay outside the venv | Inferred |
+
+**Status at `2769828`**
+
+| Issue | Status | Evidence | Confidence |
+|---|---|---|---|
+| Launcher exits 0 for a valid stage and does nothing | Resolved | `run()` now packages the job, runs `spark-submit`, and returns its exit code | Verified in code |
+| `airflow/dags/ingestion.py` is truncated | Resolved | The file is complete and uses `dag_id="ingestion_pipeline"`. The team rewrote it instead of deleting it | Verified in code |
+| Unknown stage prints a message | Still needs a test run | `parse_stage` raises `LaunchError("", 2)` and `_call` prints only a non-empty message, so the code reads as exit 2 with no output. `test_error_paths_and_codes` asserts this, but nobody ran it for this review. The stage check runs after the venv and `.env` steps, so a missing venv gives exit 1 first | Verified in code; not executed |
+| Step guide references are missing | Resolved: no longer applies | The guide was deleted in `d761827`, so nothing on the branch depends on the missing files. They were not found; J02 in [FILL-IN.md](FILL-IN.md) stays open for now | Verified in code (absence) |
+| Venv re-execution can be skipped | Resolved | The launcher no longer re-executes itself or compares interpreter paths. It runs each stage with the stage venv's Python | Verified in code |

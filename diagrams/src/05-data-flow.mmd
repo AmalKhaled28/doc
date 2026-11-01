@@ -1,0 +1,29 @@
+flowchart TD
+    CC["Common Crawl<br/>CC-NEWS WARC files"]:::ext
+    I["Ingestion<br/>extract, filter by language"]:::svc
+    T1[("websites, authors, pages,<br/>metadata, content, ingest_*")]:::store
+    C["Chunking<br/>clean, split, flag noise"]:::svc
+    T2[("article_chunks,<br/>chunk_materializations")]:::store
+    G["Tagging<br/>summary, category, tags"]:::svc
+    GQ["Groq API"]:::ext
+    T3[("chunk_analyses")]:::store
+    E["Embeddings<br/>BGE-M3 INT8"]:::svc
+    T4[("chunk_embeddings")]:::store
+    Q["Question"]:::ext
+    R["RAG agent<br/>plan, search, rerank, answer"]:::svc
+    LLM["Groq or Gemini API"]:::ext
+    A["Cited answer"]:::ext
+
+    CC --> I --> T1 --> C --> T2
+    T2 --> G --> T3
+    G <--> GQ
+    T2 --> E --> T4
+    Q --> R
+    T4 --> R
+    T2 --> R
+    R <--> LLM
+    R --> A
+
+    classDef svc fill:#E3F2FD,stroke:#1565C0,color:#0D47A1
+    classDef store fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20
+    classDef ext fill:#FFF3E0,stroke:#EF6C00,color:#E65100

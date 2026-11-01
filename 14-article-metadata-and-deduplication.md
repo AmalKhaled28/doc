@@ -138,11 +138,11 @@ Open decision: [[FILL: which job will set duplicate_of, and must stages skip dup
 ## 7. Known issues
 
 These are recorded only, not fixed. Evidence is from reading the code; nothing here was
-executed. They move to the Known Issues table when document 11 is written.
+executed. They are also listed in [11](11-roadmap-and-open-questions.md).
 
 | Issue | Evidence | Effect | Confidence |
 |---|---|---|---|
-| A database created before this change may not upgrade | The new columns are only in `CREATE TABLE IF NOT EXISTS`, with no `ALTER TABLE … ADD COLUMN`. `init_db` then creates indexes on those columns | On an older database, `init_db` fails because the column is missing, and new rows cannot be inserted | Verified in code |
+| A database created before this change does not get the new columns | `init_db` runs its main DDL only when `ingest_schema_versions` has no version 2 row. The new columns are only in `CREATE TABLE IF NOT EXISTS`, with no `ALTER TABLE … ADD COLUMN`, and the new indexes are in the same DDL | On a database with version 2 recorded, `init_db` skips the DDL with no error, so the new columns and indexes are not added. The failure appears later, at the `INSERT` into `pages`, which names columns that do not exist. This is not a rejected row, so nothing goes to `dead_letter/`: the driver retries the commit up to `MAX_RETRIES` attempts, then the run stops with an error. If an older database has no version 2 row, the DDL runs and `init_db` fails at the new indexes | Verified in code |
 | Rows from before the change have empty values | The change adds no backfill | Older articles have `NULL` in the new columns, so future deduplication cannot see them | Verified in code |
 | The `init_db` docstring is no longer one | A `raise` was added before the text in `init_db` | Tools no longer see the docstring. Runtime behavior is not affected | Verified in code |
 
